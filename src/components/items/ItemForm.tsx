@@ -1,0 +1,278 @@
+"use client";
+
+import { useState, type FormEvent } from "react";
+import type { Folder } from "@/lib/kv/folders";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { AI_TOOL_PRESETS } from "@/lib/constants";
+import { detectAiToolFromUrl } from "@/lib/ai-tool-detect";
+import { apiGet } from "@/lib/api/client";
+
+type MetadataResult = {
+  aiTool: string;
+  title: string | null;
+  description: string | null;
+  fetched: boolean;
+};
+
+export type ItemFormValues = {
+  shareUrl: string;
+  title: string;
+  memo: string;
+  contentText: string;
+  tags: string[];
+  aiTool: string;
+  favorite: boolean;
+  folderId: string | null;
+};
+
+const emptyValues: ItemFormValues = {
+  shareUrl: "",
+  title: "",
+  memo: "",
+  contentText: "",
+  tags: [],
+  aiTool: "",
+  favorite: false,
+  folderId: null,
+};
+
+type Props = {
+  initial?: Partial<ItemFormValues>;
+  folders: Folder[];
+  availableTags: string[];
+  onCancel: () => void;
+  onSubmit: (values: ItemFormValues) => Promise<void>;
+};
+
+export function ItemForm({ initial, folders, availableTags, onCancel, onSubmit }: Props) {
+  const [values, setValues] = useState<ItemFormValues>({ ...emptyValues, ...initial });
+  const [newTag, setNewTag] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [fetchingMeta, setFetchingMeta] = useState(false);
+  const [metaNotice, setMetaNotice] = useState<string | null>(null);
+
+  const handleUrlBlur = () => {
+    if (!values.aiTool) {
+      const detected = detectAiToolFromUrl(values.shareUrl);
+      if (detected) setValues((v) => ({ ...v, aiTool: detected }));
+    }
+  };
+
+  const handleAutoFetch = async () => {
+    if (!values.shareUrl.trim()) return;
+    setFetchingMeta(true);
+    setMetaNotice(null);
+    try {
+      const meta = await apiGet<MetadataResult>(
+        `/api/metadata?url=${encodeURIComponent(values.shareUrl.trim())}`,
+      );
+      setValues((v) => ({
+        ...v,
+        title: meta.title ?? v.title,
+        aiTool: meta.aiTool || v.aiTool,
+        contentText: meta.description ?? v.contentText,
+      }));
+      if (!meta.fetched) {
+        setMetaNotice(
+          "ページの内容を取得できませんでした（JS描画のページやアクセス制限の可能性）。タイトル・本文は手動で入力してください。",
+        );
+      } else if (!meta.title && !meta.description) {
+        setMetaNotice("OGPメタデータが見つかりませんでした。手動で入力してください。");
+      }
+    } catch (err) {
+      setMetaNotice(err instanceof Error ? err.message : "取得に失敗しました");
+    } finally {
+      setFetchingMeta(false);
+    }
+  };
+
+  const toggleTag = (tag: string) => {
+    setValues((v) => ({
+      ...v,
+      tags: v.tags.includes(tag) ? v.tags.filter((t) => t !== tag) : [...v.tags, tag],
+    }));
+  };
+
+  const addCustomTag = () => {
+    const t = newTag.trim();
+    if (t && !values.tags.includes(t)) {
+      setValues((v) => ({ ...v, tags: [...v.tags, t] }));
+    }
+    setNewTag("");
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!values.shareUrl.trim()) {
+      setError("共有URLは必須です");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await onSubmit(values);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "保存に失敗しました");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3 rounded-lg border p-4">
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="shareUrl">共有URL *</Label>
+        <div className="flex gap-2">
+          <Input
+            id="shareUrl"
+            required
+            value={values.shareUrl}
+            onChange={(e) => setValues((v) => ({ ...v, shareUrl: e.target.value }))}
+            onBlur={handleUrlBlur}
+            placeholder="https://..."
+          />
+          <Button
+            type="button"
+            variant="outline"
+            disabled={fetchingMeta || !values.shareUrl.trim()}
+            onClick={handleAutoFetch}
+          >
+            {fetchingMeta ? "取得中..." : "自動取得"}
+          </Button>
+        </div>
+        {metaNotice && <p className="text-xs text-muted-foreground">{metaNotice}</p>}
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="title">タイトル</Label>
+        <Input
+          id="title"
+          value={values.title}
+          onChange={(e) => setValues((v) => ({ ...v, title: e.target.value }))}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="memo">メモ</Label>
+        <Textarea
+          id="memo"
+          value={values.memo}
+          onChange={(e) => setValues((v) => ({ ...v, memo: e.target.value }))}
+          placeholder="一言メモ（空欄可）"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="contentText">本文（任意）</Label>
+        <Textarea
+          id="contentText"
+          rows={3}
+          value={values.contentText}
+          onChange={(e) => setValues((v) => ({ ...v, contentText: e.target.value }))}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <Label>AIツール</Label>
+        <div className="flex flex-wrap gap-2">
+          {AI_TOOL_PRESETS.map((tool) => (
+            <button
+              type="button"
+              key={tool}
+              onClick={() => setValues((v) => ({ ...v, aiTool: tool }))}
+              className={`rounded-full border px-3 py-1 text-sm ${
+                values.aiTool === tool ? "bg-foreground text-background" : ""
+              }`}
+            >
+              {tool}
+            </button>
+          ))}
+        </div>
+        <Input
+          className="mt-1"
+          placeholder="その他（自由入力）"
+          value={values.aiTool}
+          onChange={(e) => setValues((v) => ({ ...v, aiTool: e.target.value }))}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="folderId">フォルダ</Label>
+        <select
+          id="folderId"
+          className="rounded-md border bg-background px-3 py-2 text-sm"
+          value={values.folderId ?? ""}
+          onChange={(e) =>
+            setValues((v) => ({ ...v, folderId: e.target.value || null }))
+          }
+        >
+          <option value="">未分類</option>
+          {folders.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <Label>タグ</Label>
+        <div className="flex flex-wrap gap-2">
+          {availableTags.map((tag) => (
+            <button
+              type="button"
+              key={tag}
+              onClick={() => toggleTag(tag)}
+              className={`rounded-full border px-3 py-1 text-sm ${
+                values.tags.includes(tag) ? "bg-foreground text-background" : ""
+              }`}
+            >
+              #{tag}
+            </button>
+          ))}
+        </div>
+        <div className="mt-1 flex gap-2">
+          <Input
+            placeholder="新しいタグを追加"
+            value={newTag}
+            onChange={(e) => setNewTag(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addCustomTag();
+              }
+            }}
+          />
+          <Button type="button" variant="outline" onClick={addCustomTag}>
+            追加
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id="favorite"
+          checked={values.favorite}
+          onCheckedChange={(c) => setValues((v) => ({ ...v, favorite: c === true }))}
+        />
+        <Label htmlFor="favorite">お気に入りに登録</Label>
+      </div>
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
+
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onCancel}>
+          キャンセル
+        </Button>
+        <Button type="submit" disabled={saving}>
+          {saving ? "保存中..." : "保存"}
+        </Button>
+      </div>
+    </form>
+  );
+}

@@ -17,6 +17,8 @@ function parseItemPatch(body: unknown): ItemPatch | "invalid_folder_id" {
   if (Array.isArray(b.tags)) {
     patch.tags = b.tags.filter((t): t is string => typeof t === "string");
   }
+  if (typeof b.aiTool === "string") patch.aiTool = b.aiTool;
+  if (typeof b.favorite === "boolean") patch.favorite = b.favorite;
   if ("folderId" in b) {
     if (b.folderId === null || typeof b.folderId === "string") {
       patch.folderId = b.folderId;

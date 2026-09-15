@@ -13,11 +13,19 @@ export type LinkItem = {
   memo: string;
   tags: string[];
   folderId: string | null;
+  aiTool: string;
+  favorite: boolean;
   createdAt: string;
 };
 
-// 一覧・検索・タグフィルター用の軽量版。contentText(本文)は含めない。
-export type IndexEntry = Omit<LinkItem, "contentText">;
+// 一覧・検索・タグフィルター用の軽量版。contentText(本文)全文は含めず、
+// 検索用に先頭CONTENT_SNIPPET_LENGTH文字だけをcontentSnippetとして持つ
+// （本文全文を全部indexに載せると、5.3章で許容したトレードオフが悪化するため）。
+const CONTENT_SNIPPET_LENGTH = 300;
+
+export type IndexEntry = Omit<LinkItem, "contentText"> & {
+  contentSnippet: string;
+};
 
 export type NewItemInput = Omit<LinkItem, "id" | "createdAt">;
 export type ItemPatch = Partial<NewItemInput>;
@@ -31,8 +39,18 @@ function indexKey(userId: string) {
 }
 
 function toIndexEntry(item: LinkItem): IndexEntry {
-  const { contentText: _contentText, ...rest } = item;
-  return rest;
+  return {
+    id: item.id,
+    title: item.title,
+    shareUrl: item.shareUrl,
+    memo: item.memo,
+    tags: item.tags,
+    folderId: item.folderId,
+    aiTool: item.aiTool,
+    favorite: item.favorite,
+    createdAt: item.createdAt,
+    contentSnippet: item.contentText.slice(0, CONTENT_SNIPPET_LENGTH),
+  };
 }
 
 export async function listIndex(userId: string): Promise<IndexEntry[]> {
@@ -99,6 +117,36 @@ export async function deleteItem(userId: string, itemId: string): Promise<void> 
 
   const index = await listIndex(userId);
   const nextIndex = index.filter((entry) => entry.id !== itemId);
+  await env.LINKS_KV.put(indexKey(userId), JSON.stringify(nextIndex));
+}
+
+// タグのリネーム/削除カスケード用（tags.ts参照）。
+// 個別アイテムキーは並列書き込みして問題ない（キーがアイテムごとに独立している）が、
+// indexキーは1ユーザー1キーなので、ここでは最後に1回だけ書き込む
+// （itemごとにupdateItem()をPromise.allで並列に呼ぶと、indexへの
+// read-modify-writeが競合してほぼ確実に一部の更新が失われるため避ける）。
+export async function bulkUpdateItemTags(
+  userId: string,
+  changes: Map<string, string[]>,
+): Promise<void> {
+  if (changes.size === 0) return;
+  const { env } = getCloudflareContext();
+
+  await Promise.all(
+    Array.from(changes.entries()).map(async ([itemId, tags]) => {
+      const item = await getItem(userId, itemId);
+      if (!item) return;
+      await env.LINKS_KV.put(
+        itemKey(userId, itemId),
+        JSON.stringify({ ...item, tags }),
+      );
+    }),
+  );
+
+  const index = await listIndex(userId);
+  const nextIndex = index.map((entry) =>
+    changes.has(entry.id) ? { ...entry, tags: changes.get(entry.id)! } : entry,
+  );
   await env.LINKS_KV.put(indexKey(userId), JSON.stringify(nextIndex));
 }
 

@@ -38,6 +38,8 @@ function parseNewItemInput(
     tags: Array.isArray(b.tags)
       ? b.tags.filter((t): t is string => typeof t === "string")
       : [],
+    aiTool: typeof b.aiTool === "string" ? b.aiTool : "",
+    favorite: typeof b.favorite === "boolean" ? b.favorite : false,
   };
 }
 

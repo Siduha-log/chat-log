@@ -9,6 +9,7 @@ export type Folder = {
   id: string;
   name: string;
   parentId: string | null;
+  order: number;
   createdAt: string;
 };
 
@@ -64,6 +65,7 @@ export async function createFolder(
     id: crypto.randomUUID(),
     name: input.name,
     parentId: input.parentId,
+    order: folders.length, // 末尾に追加
     createdAt: new Date().toISOString(),
   };
 
@@ -120,4 +122,29 @@ export async function deleteFolder(
   await saveFolders(userId, nextFolders);
 
   return { ok: true };
+}
+
+// 任意の順序への並び替え（例: ドラッグ&ドロップ、上下移動ボタン）。
+// 呼び出し側は現在の全フォルダIDを希望の順序で過不足なく渡す必要がある。
+export async function reorderFolders(
+  userId: string,
+  orderedIds: string[],
+): Promise<Folder[] | "mismatch"> {
+  const folders = await listFolders(userId);
+
+  const currentIds = new Set(folders.map((f) => f.id));
+  const givenIds = new Set(orderedIds);
+  const sameSet =
+    currentIds.size === givenIds.size &&
+    [...currentIds].every((id) => givenIds.has(id));
+  if (!sameSet) return "mismatch";
+
+  const byId = new Map(folders.map((f) => [f.id, f]));
+  const reordered = orderedIds.map((id, index) => ({
+    ...byId.get(id)!,
+    order: index,
+  }));
+
+  await saveFolders(userId, reordered);
+  return reordered;
 }
