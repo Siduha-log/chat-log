@@ -48,7 +48,7 @@
 - メール/パスワード
 - Google
 - GitHub
-- X
+- X（Supabaseの新OAuth 2.0プロバイダ。`signInWithOAuth({ provider: "x" })`。2026年2月に追加された新プロバイダで、旧来の`"twitter"`（OAuth 1.0a、レガシー扱い）とは別物なので注意）
 
 **後回し（初期スコープ外）**: LINE（Supabase標準プロバイダ非対応、カスタムOAuth設定が必要）、Apple（有料Developer Program加入・ドメイン検証が前提）。将来対応する場合は別途タスク化する。
 
@@ -61,6 +61,17 @@ Cloudflare Pages FunctionsとSupabase Authは別プラットフォームであ�
   - JWT自前検証（jose等で署名検証）は鍵管理の複雑さを避けるため採用しない。
 - **キャッシュ**: Cloudflare Pages Functionsはリクエストごとにステートレスなため、毎回のリモート検証はSupabase Auth APIのレート制限・レイテンシに影響する。**Cloudflare Cache API** にトークンハッシュをキーとして検証結果を短時間（例: 60秒）保存し、同一トークンでの連続リクエストではAuth API呼び出しを省略する。
   - Cache APIはリージョン間の共有保証が弱い点を理解した上で使う（キャッシュミス時は素直にAuth APIを呼ぶフォールバックとして設計）。
+
+### 4.3 環境変数の二重管理（実装時に判明した注意点）
+
+OpenNext Cloudflareアダプタ環境下では、環境変数の置き場所が**アクセス元によって異なる**。
+
+| 変数の用途 | 置き場所 | アクセス方法 |
+|---|---|---|
+| サーバー側（middleware/proxy, Route Handler, Server Component） | `.dev.vars`（ローカル）/ Cloudflareダッシュボードの環境変数（本番） | `getCloudflareContext().env.X`（`process.env.X`ではない） |
+| ブラウザ側（Client Componentの`NEXT_PUBLIC_*`） | `.env.local`（ローカル）/ Cloudflare Pagesのビルド環境変数（本番） | `process.env.NEXT_PUBLIC_X`（Next.jsのビルド時に静的置換） |
+
+`NEXT_PUBLIC_SUPABASE_URL`等は**両方に重複して**設定する必要がある。`.dev.vars`だけに書いてもブラウザ側バンドルには反映されない（Next.jsのクライアントバンドル生成は`.env*`系ファイルしか見ないため）。テンプレートは`.dev.vars.example`と`.env.local.example`を参照。
 
 ## 5. データ設計（Cloudflare KV）
 
