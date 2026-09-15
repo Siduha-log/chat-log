@@ -6,7 +6,14 @@ import { detectAiToolFromUrl } from "@/lib/ai-tool-detect";
 // サーバー側の単純fetchでは取得できない。OGPメタタグ（title/description）は
 // SNSプレビュー用にサーバー側で埋め込まれていることが多いため、これだけを狙う。
 const FETCH_TIMEOUT_MS = 8000;
-const MAX_BYTES = 300 * 1024; // <head>が読めれば十分なので上限を設ける
+const MAX_BYTES = 500 * 1024; // <head>が読めれば十分なので上限を設ける
+
+// Botを名乗るUser-Agentだと、Bot対策のあるサイトからOGPタグを含まない
+// 簡易ページ/ブロック応答を返される場合があるため、一般的なブラウザを装う。
+// （個人利用ツールが自分自身の要求したURL1件だけを都度取得するものであり、
+//  クロールや大量アクセスは行わないため許容する）
+const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 // 既知のプライベート/ループバックIPリテラルのみを簡易ブロックする。
 // DNSリバインディング（ドメイン名が後からプライベートIPを指すよう変化する攻撃）までは
@@ -28,14 +35,40 @@ function decodeEntities(s: string): string {
     .replace(/&amp;/g, "&")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&#x27;/gi, "'")
     .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ");
 }
 
-function extractMeta(html: string, patterns: RegExp[]): string | null {
-  for (const re of patterns) {
-    const m = html.match(re);
-    if (m?.[1]) return decodeEntities(m[1].trim());
+function getAttr(tag: string, attrName: string): string | null {
+  const re = new RegExp(`${attrName}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, "i");
+  const m = tag.match(re);
+  const value = m?.[1] ?? m?.[2];
+  return value !== undefined ? decodeEntities(value.trim()) : null;
+}
+
+// <meta>タグを個別に切り出してから属性を読むことで、
+// property/name と content の記述順序に依存せず正しく取得できるようにする。
+function collectMetaTags(html: string): { key: string; content: string }[] {
+  const tags = html.match(/<meta\b[^>]*>/gi) ?? [];
+  const results: { key: string; content: string }[] = [];
+  for (const tag of tags) {
+    const content = getAttr(tag, "content");
+    if (content === null || content === "") continue;
+    const key = getAttr(tag, "property") ?? getAttr(tag, "name");
+    if (key) results.push({ key: key.toLowerCase(), content });
+  }
+  return results;
+}
+
+function pickFirst(
+  metas: { key: string; content: string }[],
+  keys: string[],
+): string | null {
+  for (const key of keys) {
+    const found = metas.find((m) => m.key === key);
+    if (found) return found.content;
   }
   return null;
 }
@@ -83,7 +116,9 @@ export async function GET(request: Request) {
       signal: controller.signal,
       redirect: "follow",
       headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; AiLinkManagerBot/1.0; +metadata-fetch)",
+        "User-Agent": USER_AGENT,
+        Accept: "text/html,application/xhtml+xml",
+        "Accept-Language": "ja,en;q=0.8",
       },
     });
 
@@ -105,16 +140,21 @@ export async function GET(request: Request) {
     }
     await reader.cancel().catch(() => {});
 
-    const title = extractMeta(html, [
-      /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']*)["']/i,
-      /<meta[^>]+content=["']([^"']*)["'][^>]+property=["']og:title["']/i,
-      /<title[^>]*>([^<]*)<\/title>/i,
-    ]);
-    const description = extractMeta(html, [
-      /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']*)["']/i,
-      /<meta[^>]+content=["']([^"']*)["'][^>]+property=["']og:description["']/i,
-      /<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i,
-    ]);
+    const metas = collectMetaTags(html);
+
+    const titleTagMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const titleTag = titleTagMatch
+      ? decodeEntities(titleTagMatch[1].replace(/\s+/g, " ").trim())
+      : null;
+
+    // ChatGPTの共有ページはog:title/twitter:titleが「このチャットを見てみる」等の
+    // 汎用的な招待文言で固定されており、実際の会話タイトルは<title>タグにしか
+    // 入っていない（実URLで検証済み）。そのためChatGPTだけ<title>を優先する。
+    const ogTitle = pickFirst(metas, ["og:title", "twitter:title"]);
+    const title = (aiTool === "ChatGPT" ? titleTag || ogTitle : ogTitle || titleTag) || null;
+
+    const description =
+      pickFirst(metas, ["og:description", "twitter:description", "description"]) || null;
 
     return NextResponse.json({ aiTool, title, description, fetched: true } satisfies MetadataResult);
   } catch {

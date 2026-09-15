@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getVerifiedUserId } from "@/lib/auth/verify";
 import { deleteFolder, updateFolder, type FolderPatch } from "@/lib/kv/folders";
+import { FOLDER_NAME_MAX_LENGTH } from "@/lib/constants";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -19,7 +20,15 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   const b = body as Record<string, unknown>;
 
   const patch: FolderPatch = {};
-  if (typeof b.name === "string") patch.name = b.name;
+  if (typeof b.name === "string") {
+    if (b.name.length > FOLDER_NAME_MAX_LENGTH) {
+      return NextResponse.json(
+        { error: `name must be ${FOLDER_NAME_MAX_LENGTH} characters or fewer` },
+        { status: 400 },
+      );
+    }
+    patch.name = b.name;
+  }
   if ("parentId" in b) {
     if (b.parentId === null || typeof b.parentId === "string") {
       patch.parentId = b.parentId;

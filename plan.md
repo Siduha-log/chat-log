@@ -153,6 +153,12 @@ indexエントリ（一覧・検索用の軽量版）は`contentText`全文の�
 - `caches`（Cloudflare Cache API、4.2章のgetUser()結果キャッシュに使用）は**実際のWorkersランタイム（本番 / `opennextjs-cloudflare preview`）でのみ存在**し、素の`next dev`には存在しない。`typeof caches !== "undefined"`でフィーチャー検出し、存在しない場合はキャッシュなしでAuth APIを直接呼ぶフォールバックにしている（[src/lib/auth/verify.ts](src/lib/auth/verify.ts)）。
 - Next.js App Routerはアンダースコアプレフィックスのフォルダやファイルをルーティングから除外する（`_folder`は404になる）。テスト用ルートを置く際は要注意。
 - 検索・フィルター・並び替えはAPIを叩き直さず、**一覧取得を1回行った後は全てクライアント側（ブラウザ）で処理**している（[src/app/page.tsx](src/app/page.tsx)）。キー入力のたびにAuth検証込みのAPIを叩くのを避けるための設計判断。
+- OGP取得時のUser-Agentは`Mozilla/5.0 (...) Chrome/...`という一般的なブラウザ文字列を使う。Bot名乗りのUser-Agent（例: `AiLinkManagerBot/1.0`）だと、Bot対策のあるサイトから403やチャレンジページを返され、OGPタグを含まない結果になることを実地で確認した（例: perplexity.aiはCloudflareのチャレンジページで403）。
+- `<meta>`タグは個別に切り出してから`property`/`name`と`content`をそれぞれ別の正規表現で読み取ることで、属性の記述順序に依存しないようにしている（[src/app/api/metadata/route.ts](src/app/api/metadata/route.ts)の`collectMetaTags`）。
+- **実際の共有URLでの検証結果**（2026-09-15、ユーザー提供の実URLで確認）:
+  - **Claude** (`claude.ai/share/...`): og:title/descriptionともに`"Claude"`/`"Shared via Claude, an AI assistant from Anthropic"`という固定の汎用文言。`<title>`タグも同様に`"Claude"`のみで、会話固有の情報はHTML内のどこにも存在しない。**修正不可能な既知の限界**（ヘッドレスブラウザでのJS実行が必須）。
+  - **ChatGPT** (`chatgpt.com/share/...`): og:title/twitter:titleは`"このチャットを見てみる"`という汎用招待文言だが、`<title>`タグには`"ChatGPT - <実際の会話タイトル>"`という会話固有の情報が入っている。**そのためChatGPTのみog:titleより`<title>`タグを優先する**よう分岐している（[src/app/api/metadata/route.ts](src/app/api/metadata/route.ts)）。説明文（description）側は代替が無く汎用文言のまま。
+  - **Gemini** (`share.gemini.google/...`→`gemini.google.com/share/...`にリダイレクト): レスポンスヘッダーの量がNode.js標準fetch実装（undici）のヘッダーサイズ上限を超え、`HeadersOverflowError`で取得自体が失敗する（`next dev`環境固有の制約の可能性があり、本番のCloudflare Workersランタイムのfetch実装では発生しない可能性がある。未検証）。既存のtry/catchにより「取得できませんでした」に正しくフォールバックする。
 
 ### 5.8 実装済みAPIエンドポイント
 
@@ -163,12 +169,12 @@ indexエントリ（一覧・検索用の軽量版）は`contentText`全文の�
 | `/api/items/[id]` | GET / PATCH / DELETE | 詳細取得・更新（`folderId`での移動含む）・削除 |
 | `/api/export` | GET | 全件JSONエクスポート（5.9章方式(A): エクスポート時に個別キーを全件フェッチ） |
 | `/api/folders` | GET / POST | フォルダ一覧・作成 |
-| `/api/folders/[id]` | PATCH / DELETE | リネーム・移動・削除（空でない場合は409） |
+| `/api/folders/[id]` | PATCH / DELETE | リネーム・移動・削除（中身は未分類化、子フォルダが残っている場合のみ409） |
 | `/api/folders/reorder` | PATCH | 任意の順序への並び替え |
 | `/api/tags` | GET / POST / PATCH / DELETE | タグ一覧・追加・リネーム（カスケード）・削除（カスケード） |
 | `/api/metadata` | GET | URLからOGPタイトル・説明文・AIツール名を取得 |
 
-全エンドポイントは`Authorization: Bearer <access_token>`必須（4.2章のgetUser()検証）。
+全エンドポイントは`Authorization: Bearer <access_token>`必須（4.2章のgetUser()検証）。フォルダ名は30文字以内（`FOLDER_NAME_MAX_LENGTH`、サーバー・クライアント両方でバリデーション）。クライアント側はIME変換中に`maxLength`属性が効かないことがあるため、`onChange`側でも明示的に文字数をクリップしている。
 
 ### 5.9 エクスポート機能
 

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 type SocialProvider = "google" | "github" | "x";
 
@@ -55,7 +57,10 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 px-4">
+    <div className="relative flex min-h-screen flex-col items-center justify-center gap-6 px-4">
+      <div className="absolute top-3 right-3">
+        <ThemeToggle />
+      </div>
       <h1 className="text-2xl font-semibold">AI Link Manager</h1>
 
       <div className="flex w-full max-w-sm flex-col gap-2">
@@ -81,22 +86,20 @@ export default function LoginPage() {
         onSubmit={handleEmailAuth}
         className="flex w-full max-w-sm flex-col gap-3"
       >
-        <input
+        <Input
           type="email"
           required
           placeholder="メールアドレス"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="rounded-md border px-3 py-2 text-sm"
         />
-        <input
+        <Input
           type="password"
           required
           minLength={6}
           placeholder="パスワード"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="rounded-md border px-3 py-2 text-sm"
         />
         <Button type="submit" disabled={loading}>
           {mode === "signin" ? "ログイン" : "アカウント作成"}
@@ -112,7 +115,7 @@ export default function LoginPage() {
             ? "アカウントをお持ちでない方はこちら"
             : "ログイン画面に戻る"}
         </button>
-        {message && <p className="text-sm text-red-500">{message}</p>}
+        {message && <p className="text-sm text-destructive">{message}</p>}
       </form>
     </div>
   );

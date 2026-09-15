@@ -1,5 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { bulkUpdateItemTags, listIndex } from "@/lib/kv/items";
+import { bulkUpdateItems, listIndex, type BulkItemPatch } from "@/lib/kv/items";
 
 // user:{user_id}:tags にユーザーが使える全タグ名をJSON配列で保持する
 // （items.tsのindexと同じ「軽量な単一キー」方式）。
@@ -47,16 +47,15 @@ export async function renameTag(
   await saveTags(userId, nextTags);
 
   const index = await listIndex(userId);
-  const changes = new Map<string, string[]>();
+  const changes = new Map<string, BulkItemPatch>();
   for (const entry of index) {
     if (entry.tags.includes(oldName)) {
-      changes.set(
-        entry.id,
-        Array.from(new Set(entry.tags.map((t) => (t === oldName ? newName : t)))),
-      );
+      changes.set(entry.id, {
+        tags: Array.from(new Set(entry.tags.map((t) => (t === oldName ? newName : t)))),
+      });
     }
   }
-  await bulkUpdateItemTags(userId, changes);
+  await bulkUpdateItems(userId, changes);
 
   return nextTags;
 }
@@ -67,13 +66,13 @@ export async function deleteTag(userId: string, name: string): Promise<string[]>
   await saveTags(userId, nextTags);
 
   const index = await listIndex(userId);
-  const changes = new Map<string, string[]>();
+  const changes = new Map<string, BulkItemPatch>();
   for (const entry of index) {
     if (entry.tags.includes(name)) {
-      changes.set(entry.id, entry.tags.filter((t) => t !== name));
+      changes.set(entry.id, { tags: entry.tags.filter((t) => t !== name) });
     }
   }
-  await bulkUpdateItemTags(userId, changes);
+  await bulkUpdateItems(userId, changes);
 
   return nextTags;
 }

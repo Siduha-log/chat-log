@@ -120,43 +120,38 @@ export async function deleteItem(userId: string, itemId: string): Promise<void> 
   await env.LINKS_KV.put(indexKey(userId), JSON.stringify(nextIndex));
 }
 
-// タグのリネーム/削除カスケード用（tags.ts参照）。
+// 複数アイテムへの一括パッチ（タグのリネーム/削除カスケード、フォルダ削除時の
+// folderId解除カスケードで使う。tags.ts / folders.ts参照）。
 // 個別アイテムキーは並列書き込みして問題ない（キーがアイテムごとに独立している）が、
 // indexキーは1ユーザー1キーなので、ここでは最後に1回だけ書き込む
 // （itemごとにupdateItem()をPromise.allで並列に呼ぶと、indexへの
 // read-modify-writeが競合してほぼ確実に一部の更新が失われるため避ける）。
-export async function bulkUpdateItemTags(
+export type BulkItemPatch = Partial<Omit<LinkItem, "id" | "createdAt" | "contentText">>;
+
+export async function bulkUpdateItems(
   userId: string,
-  changes: Map<string, string[]>,
+  changes: Map<string, BulkItemPatch>,
 ): Promise<void> {
   if (changes.size === 0) return;
   const { env } = getCloudflareContext();
 
   await Promise.all(
-    Array.from(changes.entries()).map(async ([itemId, tags]) => {
+    Array.from(changes.entries()).map(async ([itemId, patch]) => {
       const item = await getItem(userId, itemId);
       if (!item) return;
       await env.LINKS_KV.put(
         itemKey(userId, itemId),
-        JSON.stringify({ ...item, tags }),
+        JSON.stringify({ ...item, ...patch }),
       );
     }),
   );
 
   const index = await listIndex(userId);
-  const nextIndex = index.map((entry) =>
-    changes.has(entry.id) ? { ...entry, tags: changes.get(entry.id)! } : entry,
-  );
+  const nextIndex = index.map((entry) => {
+    const patch = changes.get(entry.id);
+    return patch ? { ...entry, ...patch } : entry;
+  });
   await env.LINKS_KV.put(indexKey(userId), JSON.stringify(nextIndex));
-}
-
-// フォルダ削除時のガード（folders.ts参照）に使う。
-export async function hasItemsInFolder(
-  userId: string,
-  folderId: string,
-): Promise<boolean> {
-  const index = await listIndex(userId);
-  return index.some((entry) => entry.folderId === folderId);
 }
 
 // plan.md 5.4章 方式(A): エクスポート時のみ全件を個別キーからフェッチする。

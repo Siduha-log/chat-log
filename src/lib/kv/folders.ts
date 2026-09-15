@@ -1,5 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { hasItemsInFolder } from "@/lib/kv/items";
+import { bulkUpdateItems, listIndex, type BulkItemPatch } from "@/lib/kv/items";
 
 // フォルダはparentIdによる木構造（parentId: nullがルート直下）。
 // フラット運用したい場合は全フォルダのparentIdをnullにすればよい。
@@ -20,7 +20,7 @@ export type FolderPatch = {
 
 export type DeleteFolderResult =
   | { ok: true }
-  | { ok: false; reason: "not_found" | "has_child_folders" | "has_items" };
+  | { ok: false; reason: "not_found" | "has_child_folders" };
 
 function foldersKey(userId: string) {
   return `user:${userId}:folders`;
@@ -101,6 +101,9 @@ export async function updateFolder(
   return updated;
 }
 
+// フォルダを削除する。中に入っているリンクは削除せず、folderIdをnull
+// （未分類）に解除するだけにする。子フォルダが残っている場合のみ拒否する
+// （階層構造を壊す変更になるため、今回のスコープでは保守的にブロックを維持）。
 export async function deleteFolder(
   userId: string,
   folderId: string,
@@ -114,9 +117,14 @@ export async function deleteFolder(
     return { ok: false, reason: "has_child_folders" };
   }
 
-  if (await hasItemsInFolder(userId, folderId)) {
-    return { ok: false, reason: "has_items" };
+  const index = await listIndex(userId);
+  const changes = new Map<string, BulkItemPatch>();
+  for (const entry of index) {
+    if (entry.folderId === folderId) {
+      changes.set(entry.id, { folderId: null });
+    }
   }
+  await bulkUpdateItems(userId, changes);
 
   const nextFolders = folders.filter((f) => f.id !== folderId);
   await saveFolders(userId, nextFolders);

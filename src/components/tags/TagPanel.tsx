@@ -58,7 +58,7 @@ export function TagPanel({ tags, onCreate, onRename, onDelete }: Props) {
               </button>
               <button
                 type="button"
-                className="text-xs text-red-600 underline"
+                className="text-xs text-destructive underline"
                 onClick={() => onDelete(tag)}
               >
                 削除

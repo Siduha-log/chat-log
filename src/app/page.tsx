@@ -6,13 +6,24 @@ import { apiGet, apiSend } from "@/lib/api/client";
 import type { IndexEntry, LinkItem } from "@/lib/kv/items";
 import type { Folder } from "@/lib/kv/folders";
 import { Button } from "@/components/ui/button";
-import { ItemCard } from "@/components/items/ItemCard";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { ItemTable } from "@/components/items/ItemTable";
 import { ItemForm, type ItemFormValues } from "@/components/items/ItemForm";
-import { FolderPanel } from "@/components/folders/FolderPanel";
+import { FolderPanel, type FolderSortMode } from "@/components/folders/FolderPanel";
+import { CreateFolderDialog } from "@/components/folders/CreateFolderDialog";
 import { TagPanel } from "@/components/tags/TagPanel";
 import { FilterBar, defaultFilters, type Filters } from "@/components/FilterBar";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { ResizableSidebar } from "@/components/ResizableSidebar";
 
 type EditingState = { mode: "closed" } | { mode: "new" } | { mode: "edit"; item: LinkItem };
+type MergeRequest = { draggedId: string; targetId: string };
 
 export default function Home() {
   const [authChecked, setAuthChecked] = useState(false);
@@ -23,10 +34,14 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
 
   const [selectedFolder, setSelectedFolder] = useState<string | null | "all">("all");
-  const [folderSortMode, setFolderSortMode] = useState<"custom" | "name">("custom");
+  const [folderSortMode, setFolderSortMode] = useState<FolderSortMode>("custom");
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [editing, setEditing] = useState<EditingState>({ mode: "closed" });
   const [showTagManager, setShowTagManager] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
+  const [mergeRequest, setMergeRequest] = useState<MergeRequest | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -90,8 +105,8 @@ export default function Home() {
       result = result.filter((i) => i.folderId === selectedFolder);
     }
 
-    if (filters.tag !== "all") {
-      result = result.filter((i) => i.tags.includes(filters.tag));
+    if (filters.tags.length > 0) {
+      result = result.filter((i) => i.tags.some((t) => filters.tags.includes(t)));
     }
     if (filters.aiTool !== "all") {
       result = result.filter((i) => i.aiTool === filters.aiTool);
@@ -120,9 +135,16 @@ export default function Home() {
     }
 
     result = [...result].sort((a, b) => {
-      const da = new Date(a.createdAt).getTime();
-      const db = new Date(b.createdAt).getTime();
-      return filters.sort === "newest" ? db - da : da - db;
+      switch (filters.sort) {
+        case "newest":
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        case "oldest":
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        case "title-asc":
+          return (a.title || a.shareUrl).localeCompare(b.title || b.shareUrl, "ja");
+        case "title-desc":
+          return (b.title || b.shareUrl).localeCompare(a.title || a.shareUrl, "ja");
+      }
     });
 
     return result;
@@ -171,7 +193,12 @@ export default function Home() {
     await reload();
   };
   const handleDeleteFolder = async (id: string) => {
-    if (!window.confirm("このフォルダを削除しますか？（中身が空の場合のみ削除できます）")) return;
+    if (
+      !window.confirm(
+        "このフォルダを削除しますか？中身のリンクは削除されず「未分類」になります（子フォルダが残っている場合は削除できません）。",
+      )
+    )
+      return;
     try {
       await apiSend(`/api/folders/${id}`, "DELETE");
       if (selectedFolder === id) setSelectedFolder("all");
@@ -182,6 +209,31 @@ export default function Home() {
   };
   const handleReorderFolders = async (orderedIds: string[]) => {
     await apiSend("/api/folders/reorder", "PATCH", { orderedIds });
+    await reload();
+  };
+
+  // --- drag & drop: テーブル行同士を重ねたら新規フォルダ作成、
+  //     フォルダ一覧に重ねたら既存フォルダへ直接移動 ---
+
+  const handleMergeIntoNewFolder = (draggedId: string, targetId: string) => {
+    setMergeRequest({ draggedId, targetId });
+  };
+
+  const handleConfirmMerge = async (name: string) => {
+    if (!mergeRequest) return;
+    const { folder } = await apiSend<{ folder: Folder }>("/api/folders", "POST", { name });
+    await Promise.all([
+      apiSend(`/api/items/${mergeRequest.draggedId}`, "PATCH", { folderId: folder.id }),
+      apiSend(`/api/items/${mergeRequest.targetId}`, "PATCH", { folderId: folder.id }),
+    ]);
+    setMergeRequest(null);
+    await reload();
+  };
+
+  const handleDropItemOnFolder = async (folderId: string | null) => {
+    if (!draggedItemId) return;
+    await apiSend(`/api/items/${draggedItemId}`, "PATCH", { folderId });
+    setDraggedItemId(null);
     await reload();
   };
 
@@ -230,61 +282,98 @@ export default function Home() {
     return <div className="flex flex-1 items-center justify-center">読み込み中...</div>;
   }
 
+  const sidebarContent = (
+    <div className="flex flex-col gap-6">
+      <FolderPanel
+        folders={folders}
+        selected={selectedFolder}
+        sortMode={folderSortMode}
+        draggedItemId={draggedItemId}
+        onSortModeChange={setFolderSortMode}
+        onSelect={(id) => {
+          setSelectedFolder(id);
+          setSidebarOpen(false);
+        }}
+        onCreate={handleCreateFolder}
+        onRename={handleRenameFolder}
+        onDelete={handleDeleteFolder}
+        onReorder={handleReorderFolders}
+        onDropItem={handleDropItemOnFolder}
+      />
+
+      <div>
+        <button
+          type="button"
+          className="text-sm underline"
+          onClick={() => setShowTagManager((v) => !v)}
+        >
+          {showTagManager ? "タグ管理を閉じる" : "タグ管理を開く"}
+        </button>
+        {showTagManager && (
+          <div className="mt-2">
+            <TagPanel
+              tags={tags}
+              onCreate={handleCreateTag}
+              onRename={handleRenameTag}
+              onDelete={handleDeleteTag}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 p-4">
-      <header className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">AI Link Manager</h1>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleExport}>
-            JSONエクスポート
+    <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-4 p-3 sm:p-4 lg:px-6">
+      <header className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+            <SheetTrigger
+              render={
+                <Button variant="outline" size="icon" className="md:hidden" aria-label="フォルダを開く" />
+              }
+            >
+              ☰
+            </SheetTrigger>
+            <SheetContent side="left" className="w-72 gap-0 p-4 pt-14">
+              <SheetHeader className="sr-only">
+                <SheetTitle>フォルダ</SheetTitle>
+              </SheetHeader>
+              {sidebarContent}
+            </SheetContent>
+          </Sheet>
+          <h1 className="text-lg font-semibold sm:text-xl">AI Link Manager</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Button variant="outline" size="sm" onClick={handleExport}>
+            エクスポート
           </Button>
-          <Button variant="outline" onClick={handleLogout}>
+          <Button variant="outline" size="sm" onClick={handleLogout}>
             ログアウト
           </Button>
         </div>
       </header>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
       <div className="flex flex-col gap-4 md:flex-row">
-        <aside className="flex w-full flex-col gap-6 md:w-56 md:shrink-0">
-          <FolderPanel
-            folders={folders}
-            selected={selectedFolder}
-            sortMode={folderSortMode}
-            onSortModeChange={setFolderSortMode}
-            onSelect={setSelectedFolder}
-            onCreate={handleCreateFolder}
-            onRename={handleRenameFolder}
-            onDelete={handleDeleteFolder}
-            onReorder={handleReorderFolders}
-          />
-
-          <div>
-            <button
-              type="button"
-              className="text-sm underline"
-              onClick={() => setShowTagManager((v) => !v)}
-            >
-              {showTagManager ? "タグ管理を閉じる" : "タグ管理を開く"}
-            </button>
-            {showTagManager && (
-              <div className="mt-2">
-                <TagPanel
-                  tags={tags}
-                  onCreate={handleCreateTag}
-                  onRename={handleRenameTag}
-                  onDelete={handleDeleteTag}
-                />
-              </div>
-            )}
-          </div>
+        <aside className="hidden md:block">
+          <ResizableSidebar>{sidebarContent}</ResizableSidebar>
         </aside>
 
         <main className="flex flex-1 flex-col gap-4">
-          {editing.mode === "closed" ? (
-            <Button onClick={() => setEditing({ mode: "new" })}>+ 新規登録</Button>
-          ) : (
+          <Button
+            variant={editing.mode === "new" ? "outline" : "default"}
+            onClick={() =>
+              setEditing((cur) => (cur.mode === "new" ? { mode: "closed" } : { mode: "new" }))
+            }
+            className="self-start"
+          >
+            {editing.mode === "new" ? "閉じる" : "+ 新規登録"}
+          </Button>
+
+          {editing.mode !== "closed" && (
             <ItemForm
               key={editing.mode === "edit" ? editing.item.id : "new"}
               initial={editing.mode === "edit" ? editing.item : undefined}
@@ -307,21 +396,28 @@ export default function Home() {
           ) : visibleItems.length === 0 ? (
             <p className="text-sm text-muted-foreground">該当するリンクがありません。</p>
           ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {visibleItems.map((item) => (
-                <ItemCard
-                  key={item.id}
-                  item={item}
-                  folderName={item.folderId ? folderNameById.get(item.folderId) ?? null : null}
-                  onToggleFavorite={handleToggleFavorite}
-                  onEdit={startEdit}
-                  onDelete={handleDeleteItem}
-                />
-              ))}
-            </div>
+            <ItemTable
+              items={visibleItems}
+              folderNameById={folderNameById}
+              draggedItemId={draggedItemId}
+              onDragStart={setDraggedItemId}
+              onDragEnd={() => setDraggedItemId(null)}
+              onMergeIntoNewFolder={handleMergeIntoNewFolder}
+              onToggleFavorite={handleToggleFavorite}
+              onEdit={startEdit}
+              onDelete={handleDeleteItem}
+            />
           )}
         </main>
       </div>
+
+      <CreateFolderDialog
+        open={mergeRequest !== null}
+        onOpenChange={(open) => {
+          if (!open) setMergeRequest(null);
+        }}
+        onConfirm={handleConfirmMerge}
+      />
     </div>
   );
 }

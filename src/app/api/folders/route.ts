@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getVerifiedUserId } from "@/lib/auth/verify";
 import { createFolder, listFolders } from "@/lib/kv/folders";
+import { FOLDER_NAME_MAX_LENGTH } from "@/lib/constants";
 
 export async function GET(request: Request) {
   const userId = await getVerifiedUserId(request);
@@ -29,6 +30,12 @@ export async function POST(request: Request) {
   }
 
   const b = body as Record<string, unknown>;
+  if ((b.name as string).length > FOLDER_NAME_MAX_LENGTH) {
+    return NextResponse.json(
+      { error: `name must be ${FOLDER_NAME_MAX_LENGTH} characters or fewer` },
+      { status: 400 },
+    );
+  }
   const parentId = typeof b.parentId === "string" ? b.parentId : null;
 
   const folder = await createFolder(userId, { name: b.name as string, parentId });
