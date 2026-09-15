@@ -92,6 +92,7 @@ OpenNext Cloudflareアダプタ環境下では、環境変数の置き場所が*
   "contentText": "string",
   "memo": "string",
   "tags": ["string"],
+  "folderId": "uuid | null",
   "createdAt": "ISO8601"
 }
 ```
@@ -100,7 +101,44 @@ OpenNext Cloudflareアダプタ環境下では、環境変数の置き場所が*
 
 - `index`キーは1ユーザー1キーの単一JSONのため、複数端末からの同時書き込みでread-modify-write競合が起こりうる（後勝ちで一部更新が消える可能性）。
 - `item`本体と`index`は別々のKV書き込みのため、片方のみ失敗する部分失敗が起こりうる（トランザクション非対応）。
+- `folders`キー（5.5章）も同じ「1ユーザー1キーのJSON配列」方式であり、同じ競合リスクを持つ。
 - **対応方針**: 個人〜少数人利用の前提でリスクを許容し、自動復旧の仕組みは作らない。不整合が疑われる場合は手動確認・再同期で対応する（将来、整合性チェック用のメンテナンススクリプトを検討してもよい）。
+
+### 5.4 API実装メモ（実装時に判明した注意点）
+
+- `caches`（Cloudflare Cache API、4.2章のgetUser()結果キャッシュに使用）は**実際のWorkersランタイム（本番 / `opennextjs-cloudflare preview`）でのみ存在**し、素の`next dev`には存在しない。`typeof caches !== "undefined"`でフィーチャー検出し、存在しない場合はキャッシュなしでAuth APIを直接呼ぶフォールバックにしている（[src/lib/auth/verify.ts](src/lib/auth/verify.ts)）。
+- Next.js App Routerはアンダースコアプレフィックスのフォルダやファイルをルーティングから除外する（`_folder`は404になる）。テスト用ルートを置く際は要注意。
+
+### 5.5 フォルダ機能
+
+リンクをフォルダ分けできるようにする。`parentId`による木構造（親フォルダを持たない場合は`parentId: null`）。フラット運用したい場合は全フォルダの`parentId`を`null`のままにすればよい。
+
+**キー**: `user:{user_id}:folders` — 全フォルダのJSON配列（5.1のindexと同じ「軽量な単一キー」方式）。
+
+```json
+{
+  "id": "uuid",
+  "name": "string",
+  "parentId": "uuid | null",
+  "createdAt": "ISO8601"
+}
+```
+
+- アイテムの`folderId`は未所属時`null`。フォルダ作成/移動時に親の存在チェック、および移動先が自分自身の子孫にならないかの循環チェックを行う（[src/lib/kv/folders.ts](src/lib/kv/folders.ts)の`wouldCreateCycle`）。
+- **削除ポリシー**: 子フォルダまたは所属アイテムが残っているフォルダは削除不可（409を返す）。サイレントなカスケード削除・孤児化を避けるため。UIでは「中身を先に移動/削除してください」という導線が必要。
+
+### 5.6 実装済みAPIエンドポイント
+
+| エンドポイント | メソッド | 内容 |
+|---|---|---|
+| `/api/items` | GET | 一覧取得（`?folderId=`でフィルタ、`unfiled`で未所属のみ） |
+| `/api/items` | POST | 新規作成 |
+| `/api/items/[id]` | GET / PATCH / DELETE | 詳細取得・更新（`folderId`での移動含む）・削除 |
+| `/api/export` | GET | 全件JSONエクスポート（5.4章方式(A): エクスポート時に個別キーを全件フェッチ） |
+| `/api/folders` | GET / POST | フォルダ一覧・作成 |
+| `/api/folders/[id]` | PATCH / DELETE | リネーム・移動・削除（空でない場合は409） |
+
+全エンドポイントは`Authorization: Bearer <access_token>`必須（4.2章のgetUser()検証）。
 
 ### 5.4 エクスポート機能
 
