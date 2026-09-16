@@ -132,6 +132,34 @@ export async function deleteFolder(
   return { ok: true };
 }
 
+// 中身のアイテムが1つも無く、かつ子フォルダも持たないフォルダをまとめて削除する
+// （個別削除と同じ「子フォルダが残っている場合は削除しない」制約を踏襲）。
+export async function deleteEmptyFolders(userId: string): Promise<string[]> {
+  const [folders, index] = await Promise.all([listFolders(userId), listIndex(userId)]);
+
+  const usedFolderIds = new Set(
+    index.map((item) => item.folderId).filter((id): id is string => id !== null),
+  );
+  const parentIds = new Set(
+    folders.map((f) => f.parentId).filter((id): id is string => id !== null),
+  );
+
+  const emptyIds = folders
+    .filter((f) => !usedFolderIds.has(f.id) && !parentIds.has(f.id))
+    .map((f) => f.id);
+  if (emptyIds.length === 0) return [];
+
+  const remaining = folders.filter((f) => !emptyIds.includes(f.id));
+  await saveFolders(userId, remaining);
+  return emptyIds;
+}
+
+// アカウント削除用: このユーザーのフォルダキー自体を丸ごと削除する。
+export async function deleteAllFolders(userId: string): Promise<void> {
+  const { env } = getCloudflareContext();
+  await env.LINKS_KV.delete(foldersKey(userId));
+}
+
 // 任意の順序への並び替え（例: ドラッグ&ドロップ、上下移動ボタン）。
 // 呼び出し側は現在の全フォルダIDを希望の順序で過不足なく渡す必要がある。
 export async function reorderFolders(

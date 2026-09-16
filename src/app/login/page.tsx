@@ -8,6 +8,12 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 
 type SocialProvider = "google" | "github" | "x";
 
+// 共有シート(/share)経由で未ログイン状態だった場合、ログイン後に元の
+// 行き先（例: /?shareUrl=...）へ戻すためのクエリパラメータ。
+function getNextPath(): string {
+  return new URLSearchParams(window.location.search).get("next") || "/";
+}
+
 const socialProviders: { id: SocialProvider; label: string }[] = [
   { id: "google", label: "Googleでログイン" },
   { id: "github", label: "GitHubでログイン" },
@@ -26,7 +32,7 @@ export default function LoginPage() {
     await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(getNextPath())}`,
       },
     });
   };
@@ -50,7 +56,7 @@ export default function LoginPage() {
     }
 
     if (mode === "signin") {
-      window.location.href = "/";
+      window.location.href = getNextPath();
     } else {
       setMessage("確認メールを送信しました。メール内のリンクから認証してください。");
     }
@@ -61,7 +67,7 @@ export default function LoginPage() {
       <div className="absolute top-3 right-3">
         <ThemeToggle />
       </div>
-      <h1 className="text-2xl font-semibold">AI Link Manager</h1>
+      <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">ChatHub</h1>
 
       <div className="flex w-full max-w-sm flex-col gap-2">
         {socialProviders.map((p) => (

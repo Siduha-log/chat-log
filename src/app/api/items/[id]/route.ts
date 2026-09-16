@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getVerifiedUserId } from "@/lib/auth/verify";
 import { deleteItem, getItem, updateItem, type ItemPatch } from "@/lib/kv/items";
 import { listFolders } from "@/lib/kv/folders";
+import { CONTENT_MAX_LENGTH } from "@/lib/constants";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -12,7 +13,9 @@ function parseItemPatch(body: unknown): ItemPatch | "invalid_folder_id" {
   const patch: ItemPatch = {};
   if (typeof b.title === "string") patch.title = b.title;
   if (typeof b.shareUrl === "string") patch.shareUrl = b.shareUrl;
-  if (typeof b.contentText === "string") patch.contentText = b.contentText;
+  if (typeof b.contentText === "string") {
+    patch.contentText = b.contentText.slice(0, CONTENT_MAX_LENGTH);
+  }
   if (typeof b.memo === "string") patch.memo = b.memo;
   if (Array.isArray(b.tags)) {
     patch.tags = b.tags.filter((t): t is string => typeof t === "string");

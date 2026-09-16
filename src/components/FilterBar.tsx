@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 export type SortOrder = "newest" | "oldest" | "title-asc" | "title-desc";
 
@@ -34,7 +36,21 @@ type Props = {
   availableAiTools: string[];
 };
 
+// 検索キーワード以外の項目が既定値から変わっているかどうか
+// （「絞り込み適用中」バッジの表示判定に使う。並び替えは絞り込みではないため含めない）
+function hasActiveAdvancedFilters(filters: Filters): boolean {
+  return (
+    filters.tags.length > 0 ||
+    filters.aiTool !== defaultFilters.aiTool ||
+    filters.favoriteOnly !== defaultFilters.favoriteOnly ||
+    filters.dateFrom !== defaultFilters.dateFrom ||
+    filters.dateTo !== defaultFilters.dateTo
+  );
+}
+
 export function FilterBar({ filters, onChange, availableTags, availableAiTools }: Props) {
+  const [expanded, setExpanded] = useState(false);
+
   const set = <K extends keyof Filters>(key: K, value: Filters[K]) =>
     onChange({ ...filters, [key]: value });
 
@@ -47,9 +63,11 @@ export function FilterBar({ filters, onChange, availableTags, availableAiTools }
     );
   };
 
+  const advancedActive = hasActiveAdvancedFilters(filters);
+
   return (
     <div className="flex flex-col gap-3 rounded-lg border p-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <div className="flex flex-1 flex-col gap-1">
           <Label htmlFor="search">検索</Label>
           <Input
@@ -60,97 +78,119 @@ export function FilterBar({ filters, onChange, availableTags, availableAiTools }
           />
         </div>
 
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="aitool-filter">AIツール</Label>
-          <select
-            id="aitool-filter"
-            className="rounded-md border bg-background px-2 py-2 text-sm"
-            value={filters.aiTool}
-            onChange={(e) => set("aiTool", e.target.value)}
-          >
-            <option value="all">すべて</option>
-            {availableAiTools.map((tool) => (
-              <option key={tool} value={tool}>
-                {tool}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="date-from">期間</Label>
-          <div className="flex items-center gap-1">
-            <Input
-              id="date-from"
-              type="date"
-              className="w-36"
-              value={filters.dateFrom}
-              onChange={(e) => set("dateFrom", e.target.value)}
-            />
-            <span className="text-sm text-muted-foreground">〜</span>
-            <Input
-              type="date"
-              className="w-36"
-              value={filters.dateTo}
-              onChange={(e) => set("dateTo", e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="sort">並び替え</Label>
-          <select
-            id="sort"
-            className="rounded-md border bg-background px-2 py-2 text-sm"
-            value={filters.sort}
-            onChange={(e) => set("sort", e.target.value as SortOrder)}
-          >
-            <option value="newest">新着順</option>
-            <option value="oldest">古い順</option>
-            <option value="title-asc">タイトル順（昇順）</option>
-            <option value="title-desc">タイトル順（降順）</option>
-          </select>
-        </div>
-
-        <div className="flex items-center gap-2 pb-2">
-          <Checkbox
-            id="favorite-only"
-            checked={filters.favoriteOnly}
-            onCheckedChange={(c) => set("favoriteOnly", c === true)}
-          />
-          <Label htmlFor="favorite-only">★のみ</Label>
-        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="gap-1.5"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((v) => !v)}
+        >
+          詳細フィルター {expanded ? "▴" : "▾"}
+          {advancedActive && (
+            <Badge variant="default" className="px-1.5">
+              絞り込み適用中
+            </Badge>
+          )}
+        </Button>
       </div>
 
-      {availableTags.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center justify-between">
-            <Label>タグ（複数選択可）</Label>
-            {filters.tags.length > 0 && (
-              <button
-                type="button"
-                className="text-xs text-muted-foreground underline"
-                onClick={() => set("tags", [])}
+      {expanded && (
+        <div className="flex flex-col gap-3 border-t pt-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="aitool-filter">AIツール</Label>
+              <select
+                id="aitool-filter"
+                className="rounded-md border bg-background px-2 py-2 text-sm"
+                value={filters.aiTool}
+                onChange={(e) => set("aiTool", e.target.value)}
               >
-                選択解除
-              </button>
-            )}
+                <option value="all">すべて</option>
+                {availableAiTools.map((tool) => (
+                  <option key={tool} value={tool}>
+                    {tool}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="date-from">期間</Label>
+              <div className="flex items-center gap-1">
+                <Input
+                  id="date-from"
+                  type="date"
+                  className="w-36"
+                  value={filters.dateFrom}
+                  onChange={(e) => set("dateFrom", e.target.value)}
+                />
+                <span className="text-sm text-muted-foreground">〜</span>
+                <Input
+                  type="date"
+                  className="w-36"
+                  value={filters.dateTo}
+                  onChange={(e) => set("dateTo", e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="sort">並び替え</Label>
+              <select
+                id="sort"
+                className="rounded-md border bg-background px-2 py-2 text-sm"
+                value={filters.sort}
+                onChange={(e) => set("sort", e.target.value as SortOrder)}
+              >
+                <option value="newest">新着順</option>
+                <option value="oldest">古い順</option>
+                <option value="title-asc">タイトル順（昇順）</option>
+                <option value="title-desc">タイトル順（降順）</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2 pb-2">
+              <Checkbox
+                id="favorite-only"
+                checked={filters.favoriteOnly}
+                onCheckedChange={(c) => set("favoriteOnly", c === true)}
+              />
+              <Label htmlFor="favorite-only">★のみ</Label>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {availableTags.map((tag) => {
-              const selected = filters.tags.includes(tag);
-              return (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => toggleTag(tag)}
-                  aria-pressed={selected}
-                >
-                  <Badge variant={selected ? "default" : "outline"}>#{tag}</Badge>
-                </button>
-              );
-            })}
-          </div>
+
+          {availableTags.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <Label>タグ（複数選択可）</Label>
+                {filters.tags.length > 0 && (
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground underline"
+                    onClick={() => set("tags", [])}
+                  >
+                    選択解除
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {availableTags.map((tag) => {
+                  const selected = filters.tags.includes(tag);
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => toggleTag(tag)}
+                      aria-pressed={selected}
+                    >
+                      <Badge variant={selected ? "default" : "outline"}>#{tag}</Badge>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

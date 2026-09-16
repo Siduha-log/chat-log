@@ -40,6 +40,15 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
   --color-favorite: var(--favorite);
+  /* 文字サイズ設定（小/中/大）用。--font-scaleで一括スケールすることで、
+     remベースのpadding/gap等の余白を変えずに文字サイズだけを連動させる
+     （line-heightはTailwindデフォルトで無次元の比率指定のため自動追従する）。 */
+  --text-xs: calc(var(--font-scale) * 0.75rem);
+  --text-sm: calc(var(--font-scale) * 0.875rem);
+  --text-base: calc(var(--font-scale) * 1rem);
+  --text-lg: calc(var(--font-scale) * 1.125rem);
+  --text-xl: calc(var(--font-scale) * 1.25rem);
+  --text-2xl: calc(var(--font-scale) * 1.5rem);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -50,6 +59,9 @@
 }
 
 :root {
+  /* 文字サイズ設定のデフォルト（「中」）。data-font-size属性なし＝中として扱う。 */
+  --font-scale: 1.1;
+
   /* 優しい色調（くすみカラー・パステル基調）のライトテーマ */
   --background: oklch(0.985 0.006 95);
   --foreground: oklch(0.32 0.02 260);
@@ -120,6 +132,14 @@
   --sidebar-accent-foreground: oklch(0.92 0.015 290);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.65 0.09 230);
+}
+
+:root[data-font-size="small"] {
+  --font-scale: 1;
+}
+
+:root[data-font-size="large"] {
+  --font-scale: 1.25;
 }
 
 @layer base {

@@ -20,6 +20,8 @@ type Props = {
   onDelete: (id: string) => Promise<void>;
   onReorder: (orderedIds: string[]) => Promise<void>;
   onDropItem: (folderId: string | null) => void;
+  emptyFolderCount: number;
+  onDeleteEmptyFolders: () => void;
 };
 
 function depthOf(folders: Folder[], folder: Folder): number {
@@ -53,6 +55,8 @@ export function FolderPanel({
   onDelete,
   onReorder,
   onDropItem,
+  emptyFolderCount,
+  onDeleteEmptyFolders,
 }: Props) {
   const [newName, setNewName] = useState("");
   const [newNameError, setNewNameError] = useState<string | null>(null);
@@ -122,7 +126,9 @@ export function FolderPanel({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">フォルダ</span>
+        <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+          フォルダ
+        </span>
         <select
           className="rounded-md border bg-background px-2 py-1 text-xs"
           value={sortMode}
@@ -268,6 +274,18 @@ export function FolderPanel({
         </div>
         {newNameError && <p className="text-xs text-destructive">{newNameError}</p>}
       </div>
+
+      {emptyFolderCount > 0 && (
+        <div className="mt-2">
+          <button
+            type="button"
+            className="text-xs text-destructive underline"
+            onClick={onDeleteEmptyFolders}
+          >
+            空のフォルダを一括削除（{emptyFolderCount}件）
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -167,3 +167,14 @@ export async function exportAllItems(userId: string): Promise<LinkItem[]> {
     .filter((raw): raw is string => raw !== null)
     .map((raw) => JSON.parse(raw) as LinkItem);
 }
+
+// アカウント削除用: このユーザーの全アイテムキー＋indexキーを丸ごと削除する。
+// 個別アイテムキーは互いに独立しているため並列deleteで問題なく、
+// indexキーは最後に1回だけ削除する。
+export async function deleteAllItems(userId: string): Promise<void> {
+  const { env } = getCloudflareContext();
+  const index = await listIndex(userId);
+
+  await Promise.all(index.map((entry) => env.LINKS_KV.delete(itemKey(userId, entry.id))));
+  await env.LINKS_KV.delete(indexKey(userId));
+}

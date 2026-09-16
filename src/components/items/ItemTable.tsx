@@ -86,7 +86,7 @@ export function ItemTable({
                   href={item.shareUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block truncate font-medium hover:underline"
+                  className="block truncate text-base font-semibold hover:underline"
                 >
                   {item.title || item.shareUrl}
                 </a>

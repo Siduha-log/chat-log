@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { apiGet, apiSend } from "@/lib/api/client";
 import type { IndexEntry, LinkItem } from "@/lib/kv/items";
 import type { Folder } from "@/lib/kv/folders";
+import { ITEMS_PER_PAGE } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -19,8 +20,10 @@ import { FolderPanel, type FolderSortMode } from "@/components/folders/FolderPan
 import { CreateFolderDialog } from "@/components/folders/CreateFolderDialog";
 import { TagPanel } from "@/components/tags/TagPanel";
 import { FilterBar, defaultFilters, type Filters } from "@/components/FilterBar";
+import { Pagination } from "@/components/Pagination";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ResizableSidebar } from "@/components/ResizableSidebar";
+import { SettingsButton } from "@/components/SettingsButton";
 
 type EditingState = { mode: "closed" } | { mode: "new" } | { mode: "edit"; item: LinkItem };
 type MergeRequest = { draggedId: string; targetId: string };
@@ -42,6 +45,45 @@ export default function Home() {
 
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [mergeRequest, setMergeRequest] = useState<MergeRequest | null>(null);
+
+  // Android共有シート(/share)経由の遷移で ?shareUrl=... が付いていた場合の
+  // プリフィル値。新規登録フォームのinitialに渡す（4章参照）。
+  const [pendingShareUrl, setPendingShareUrl] = useState<string | null>(null);
+
+  // indexの`contentSnippet`(先頭300文字)には無い、本文の奥の方にしか出てこない
+  // キーワード用のサーバー全文検索結果。null = 未検索（クエリ空、または未確定）。
+  const [contentMatchIds, setContentMatchIds] = useState<Set<string> | null>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const q = filters.query.trim();
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+
+    // クエリが空の場合も即座にsetStateせず、他の分岐と同じくタイマー経由の
+    // 非同期コールバック内でsetStateする（エフェクト本体での同期的setStateを避ける）。
+    searchTimer.current = setTimeout(
+      async () => {
+        if (!q) {
+          setContentMatchIds(null);
+          return;
+        }
+        try {
+          const { ids } = await apiGet<{ ids: string[] }>(
+            `/api/search?q=${encodeURIComponent(q)}`,
+          );
+          setContentMatchIds(new Set(ids));
+        } catch {
+          // 全文検索は上積み機能のため、失敗してもタイトル/メモ/スニペット一致の
+          // 結果はそのまま表示され続ける（サイレントに諦める）
+        }
+      },
+      q ? 400 : 0,
+    );
+
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [filters.query]);
 
   useEffect(() => {
     (async () => {
@@ -79,6 +121,21 @@ export default function Home() {
   };
 
   useEffect(() => {
+    if (!authChecked) return;
+    const shareUrl = new URLSearchParams(window.location.search).get("shareUrl");
+    if (!shareUrl) return;
+
+    // エフェクト本体での同期的setStateを避けるため、他の箇所と同様に
+    // タイマー経由のコールバック内でsetStateする。
+    const timer = setTimeout(() => {
+      setPendingShareUrl(shareUrl);
+      setEditing({ mode: "new" });
+      window.history.replaceState(null, "", window.location.pathname);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [authChecked]);
+
+  useEffect(() => {
     // マウント時のデータ取得。reload()内のsetStateは常にawait後（catch/finally含む）
     // にしか走らないため実質的に問題ないが、このルールは関数境界をまたいだ
     // 静的解析までは行えないため誤検知する。
@@ -95,6 +152,16 @@ export default function Home() {
     () => new Map(folders.map((f) => [f.id, f.name])),
     [folders],
   );
+
+  // 中身のアイテムが1つも無く、かつ子フォルダも持たないフォルダのid一覧
+  // （空フォルダ一括削除ボタンの表示件数・無効化判定に使う）。
+  const emptyFolderIds = useMemo(() => {
+    const used = new Set(items.map((i) => i.folderId).filter((id): id is string => id !== null));
+    const parents = new Set(
+      folders.map((f) => f.parentId).filter((id): id is string => id !== null),
+    );
+    return folders.filter((f) => !used.has(f.id) && !parents.has(f.id)).map((f) => f.id);
+  }, [items, folders]);
 
   const visibleItems = useMemo(() => {
     let result = items;
@@ -130,7 +197,8 @@ export default function Home() {
           i.memo.toLowerCase().includes(q) ||
           i.tags.some((t) => t.toLowerCase().includes(q)) ||
           i.aiTool.toLowerCase().includes(q) ||
-          i.contentSnippet.toLowerCase().includes(q),
+          i.contentSnippet.toLowerCase().includes(q) ||
+          (contentMatchIds?.has(i.id) ?? false),
       );
     }
 
@@ -148,7 +216,28 @@ export default function Home() {
     });
 
     return result;
-  }, [items, selectedFolder, filters]);
+  }, [items, selectedFolder, filters, contentMatchIds]);
+
+  // 一覧が長くなりすぎないよう1ページ20件に区切って表示する。
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(visibleItems.length / ITEMS_PER_PAGE));
+  const pagedItems = useMemo(
+    () => visibleItems.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE),
+    [visibleItems, currentPage],
+  );
+
+  // フォルダ選択・検索・絞り込みの条件が変わったら1ページ目に戻す。
+  // （レンダー中の条件付きsetStateによる状態調整。Reactの推奨パターンで、
+  // useEffect内での無条件setStateを避けるルールにも抵触しない）
+  const [paginationDeps, setPaginationDeps] = useState({ selectedFolder, filters, contentMatchIds });
+  if (
+    paginationDeps.selectedFolder !== selectedFolder ||
+    paginationDeps.filters !== filters ||
+    paginationDeps.contentMatchIds !== contentMatchIds
+  ) {
+    setPaginationDeps({ selectedFolder, filters, contentMatchIds });
+    setCurrentPage(1);
+  }
 
   // --- item handlers ---
 
@@ -159,6 +248,7 @@ export default function Home() {
       await apiSend("/api/items", "POST", values);
     }
     setEditing({ mode: "closed" });
+    setPendingShareUrl(null);
     await reload();
   };
 
@@ -211,6 +301,16 @@ export default function Home() {
     await apiSend("/api/folders/reorder", "PATCH", { orderedIds });
     await reload();
   };
+  const handleDeleteEmptyFolders = async () => {
+    if (emptyFolderIds.length === 0) return;
+    if (!window.confirm(`空のフォルダを${emptyFolderIds.length}件削除しますか？`)) return;
+    try {
+      await apiSend("/api/folders/delete-empty", "DELETE");
+      await reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "削除に失敗しました");
+    }
+  };
 
   // --- drag & drop: テーブル行同士を重ねたら新規フォルダ作成、
   //     フォルダ一覧に重ねたら既存フォルダへ直接移動 ---
@@ -221,13 +321,20 @@ export default function Home() {
 
   const handleConfirmMerge = async (name: string) => {
     if (!mergeRequest) return;
-    const { folder } = await apiSend<{ folder: Folder }>("/api/folders", "POST", { name });
-    await Promise.all([
-      apiSend(`/api/items/${mergeRequest.draggedId}`, "PATCH", { folderId: folder.id }),
-      apiSend(`/api/items/${mergeRequest.targetId}`, "PATCH", { folderId: folder.id }),
-    ]);
-    setMergeRequest(null);
-    await reload();
+    try {
+      const { folder } = await apiSend<{ folder: Folder }>("/api/folders", "POST", { name });
+      // 2件のfolderId更新は個別PATCHの並列呼び出しにしない。indexキーへの
+      // read-modify-writeが競合し、後勝ちで片方の更新が消えるため
+      // （src/lib/kv/items.tsのbulkUpdateItemsのコメント参照）。
+      await apiSend("/api/items/bulk", "PATCH", {
+        ids: [mergeRequest.draggedId, mergeRequest.targetId],
+        patch: { folderId: folder.id },
+      });
+      setMergeRequest(null);
+      await reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "フォルダの作成に失敗しました");
+    }
   };
 
   const handleDropItemOnFolder = async (folderId: string | null) => {
@@ -283,7 +390,7 @@ export default function Home() {
   }
 
   const sidebarContent = (
-    <div className="flex flex-col gap-6">
+    <div className="flex h-full flex-col gap-6">
       <FolderPanel
         folders={folders}
         selected={selectedFolder}
@@ -299,6 +406,8 @@ export default function Home() {
         onDelete={handleDeleteFolder}
         onReorder={handleReorderFolders}
         onDropItem={handleDropItemOnFolder}
+        emptyFolderCount={emptyFolderIds.length}
+        onDeleteEmptyFolders={handleDeleteEmptyFolders}
       />
 
       <div>
@@ -320,6 +429,10 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      <div className="mt-auto pt-4">
+        <SettingsButton />
+      </div>
     </div>
   );
 
@@ -330,7 +443,12 @@ export default function Home() {
           <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
             <SheetTrigger
               render={
-                <Button variant="outline" size="icon" className="md:hidden" aria-label="フォルダを開く" />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-11 w-11 text-xl md:hidden"
+                  aria-label="フォルダを開く"
+                />
               }
             >
               ☰
@@ -342,7 +460,26 @@ export default function Home() {
               {sidebarContent}
             </SheetContent>
           </Sheet>
-          <h1 className="text-lg font-semibold sm:text-xl">AI Link Manager</h1>
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
+            <button
+              type="button"
+              className="cursor-pointer transition-opacity hover:opacity-70"
+              onClick={() => {
+                setSelectedFolder("all");
+                setFilters(defaultFilters);
+                setSidebarOpen(false);
+                setEditing({ mode: "closed" });
+                setPendingShareUrl(null);
+                // フォルダ・絞り込み条件が既に初期値の場合、その変更検知に連動する
+                // ページリセットのロジック（下記paginationDeps）が発火しないため、
+                // ページネーションの位置は明示的にリセットする。
+                setCurrentPage(1);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            >
+              ChatHub
+            </button>
+          </h1>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
@@ -365,9 +502,10 @@ export default function Home() {
         <main className="flex flex-1 flex-col gap-4">
           <Button
             variant={editing.mode === "new" ? "outline" : "default"}
-            onClick={() =>
-              setEditing((cur) => (cur.mode === "new" ? { mode: "closed" } : { mode: "new" }))
-            }
+            onClick={() => {
+              setEditing((cur) => (cur.mode === "new" ? { mode: "closed" } : { mode: "new" }));
+              setPendingShareUrl(null);
+            }}
             className="self-start"
           >
             {editing.mode === "new" ? "閉じる" : "+ 新規登録"}
@@ -376,10 +514,19 @@ export default function Home() {
           {editing.mode !== "closed" && (
             <ItemForm
               key={editing.mode === "edit" ? editing.item.id : "new"}
-              initial={editing.mode === "edit" ? editing.item : undefined}
+              initial={
+                editing.mode === "edit"
+                  ? editing.item
+                  : pendingShareUrl
+                    ? { shareUrl: pendingShareUrl }
+                    : undefined
+              }
               folders={folders}
               availableTags={tags}
-              onCancel={() => setEditing({ mode: "closed" })}
+              onCancel={() => {
+                setEditing({ mode: "closed" });
+                setPendingShareUrl(null);
+              }}
               onSubmit={handleCreateOrUpdateItem}
             />
           )}
@@ -396,22 +543,30 @@ export default function Home() {
           ) : visibleItems.length === 0 ? (
             <p className="text-sm text-muted-foreground">該当するリンクがありません。</p>
           ) : (
-            <ItemTable
-              items={visibleItems}
-              folderNameById={folderNameById}
-              draggedItemId={draggedItemId}
-              onDragStart={setDraggedItemId}
-              onDragEnd={() => setDraggedItemId(null)}
-              onMergeIntoNewFolder={handleMergeIntoNewFolder}
-              onToggleFavorite={handleToggleFavorite}
-              onEdit={startEdit}
-              onDelete={handleDeleteItem}
-            />
+            <>
+              <ItemTable
+                items={pagedItems}
+                folderNameById={folderNameById}
+                draggedItemId={draggedItemId}
+                onDragStart={setDraggedItemId}
+                onDragEnd={() => setDraggedItemId(null)}
+                onMergeIntoNewFolder={handleMergeIntoNewFolder}
+                onToggleFavorite={handleToggleFavorite}
+                onEdit={startEdit}
+                onDelete={handleDeleteItem}
+              />
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
+            </>
           )}
         </main>
       </div>
 
       <CreateFolderDialog
+        key={mergeRequest ? `${mergeRequest.draggedId}:${mergeRequest.targetId}` : "closed"}
         open={mergeRequest !== null}
         onOpenChange={(open) => {
           if (!open) setMergeRequest(null);

@@ -3,3 +3,13 @@ NEXTJS_ENV=development
 # Supabase Project Settings > API から取得して値を入れてください
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
+
+# Supabase Project Settings > API の「service_role」シークレットキー。
+# アカウント削除機能（supabase.auth.admin.deleteUser）でのみ使用する。
+# RLSを全てバイパスする強力な管理者権限キーのため、絶対に公開しないこと
+# （NEXT_PUBLIC_を付けない＝サーバー側のみで参照する）。
+SUPABASE_SERVICE_ROLE_KEY=
+
+# Jina Reader (https://r.jina.ai) のAPIキー（任意）。
+# 未設定でも20回/分までは動作するが、設定すると500回/分・無料トークン付与に緩和される。
+JINA_API_KEY=

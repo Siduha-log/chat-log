@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getVerifiedUserId } from "@/lib/auth/verify";
 import { createItem, listIndex, type NewItemInput } from "@/lib/kv/items";
 import { listFolders } from "@/lib/kv/folders";
+import { CONTENT_MAX_LENGTH } from "@/lib/constants";
 
 export async function GET(request: Request) {
   const userId = await getVerifiedUserId(request);
@@ -33,7 +34,10 @@ function parseNewItemInput(
   return {
     title: typeof b.title === "string" ? b.title : "",
     shareUrl: b.shareUrl,
-    contentText: typeof b.contentText === "string" ? b.contentText : "",
+    contentText:
+      typeof b.contentText === "string"
+        ? b.contentText.slice(0, CONTENT_MAX_LENGTH)
+        : "",
     memo: typeof b.memo === "string" ? b.memo : "",
     tags: Array.isArray(b.tags)
       ? b.tags.filter((t): t is string => typeof t === "string")

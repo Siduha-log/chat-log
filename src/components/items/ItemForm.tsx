@@ -14,7 +14,7 @@ import { apiGet } from "@/lib/api/client";
 type MetadataResult = {
   aiTool: string;
   title: string | null;
-  description: string | null;
+  content: string | null;
   fetched: boolean;
 };
 
@@ -63,6 +63,23 @@ export function ItemForm({ initial, folders, availableTags, onCancel, onSubmit }
     }
   };
 
+  // iOSはWeb Share Target非対応のため、共有シートの「コピー」で
+  // クリップボードに入れたURLをここで貼り付けてもらう運用の入口。
+  const handlePasteUrl = async () => {
+    setMetaNotice(null);
+    try {
+      const text = (await navigator.clipboard.readText()).trim();
+      if (!text) return;
+      setValues((v) => ({
+        ...v,
+        shareUrl: text,
+        aiTool: v.aiTool || detectAiToolFromUrl(text),
+      }));
+    } catch {
+      setMetaNotice("クリップボードの読み取りに失敗しました。共有URL欄に直接貼り付けてください。");
+    }
+  };
+
   const handleAutoFetch = async () => {
     if (!values.shareUrl.trim()) return;
     setFetchingMeta(true);
@@ -75,14 +92,18 @@ export function ItemForm({ initial, folders, availableTags, onCancel, onSubmit }
         ...v,
         title: meta.title ?? v.title,
         aiTool: meta.aiTool || v.aiTool,
-        contentText: meta.description ?? v.contentText,
+        contentText: meta.content ?? v.contentText,
       }));
       if (!meta.fetched) {
         setMetaNotice(
-          "ページの内容を取得できませんでした（JS描画のページやアクセス制限の可能性）。タイトル・本文は手動で入力してください。",
+          "ページの内容を取得できませんでした（JS描画のページやアクセス制限の可能性）。会話のやり取りをコピーして、タイトル・本文欄に貼り付けてください。",
         );
-      } else if (!meta.title && !meta.description) {
-        setMetaNotice("OGPメタデータが見つかりませんでした。手動で入力してください。");
+      } else if (!meta.content) {
+        setMetaNotice(
+          "※本文の自動取得に失敗しました（Gemini等では起こりうる既知の制限です）。会話のやり取りや回答のまとめをコピーして、本文欄に貼り付けてください。",
+        );
+      } else if (!meta.title) {
+        setMetaNotice("タイトルの自動取得に失敗しました。必要に応じて手動で入力してください。");
       }
     } catch (err) {
       setMetaNotice(err instanceof Error ? err.message : "取得に失敗しました");
@@ -136,13 +157,16 @@ export function ItemForm({ initial, folders, availableTags, onCancel, onSubmit }
             onBlur={handleUrlBlur}
             placeholder="https://..."
           />
+          <Button type="button" variant="outline" onClick={handlePasteUrl}>
+            📋 貼り付け
+          </Button>
           <Button
             type="button"
             variant="outline"
             disabled={fetchingMeta || !values.shareUrl.trim()}
             onClick={handleAutoFetch}
           >
-            {fetchingMeta ? "取得中..." : "自動取得"}
+            {fetchingMeta ? "取得中…（最大1分ほどかかる場合があります）" : "自動取得"}
           </Button>
         </div>
         {metaNotice && <p className="text-xs text-muted-foreground">{metaNotice}</p>}

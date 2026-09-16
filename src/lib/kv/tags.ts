@@ -60,6 +60,12 @@ export async function renameTag(
   return nextTags;
 }
 
+// アカウント削除用: このユーザーのタグキー自体を丸ごと削除する。
+export async function deleteAllTags(userId: string): Promise<void> {
+  const { env } = getCloudflareContext();
+  await env.LINKS_KV.delete(tagsKey(userId));
+}
+
 export async function deleteTag(userId: string, name: string): Promise<string[]> {
   const tags = await listTags(userId);
   const nextTags = tags.filter((t) => t !== name);
