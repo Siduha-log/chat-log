@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FOLDER_NAME_MAX_LENGTH } from "@/lib/constants";
 
-export type FolderSortMode = "custom" | "name" | "created-desc" | "created-asc";
+export type FolderSortMode = "custom" | "name-asc" | "name-desc";
 
 type Props = {
   folders: Folder[];
@@ -71,14 +71,11 @@ export function FolderPanel({
   const sorted = useMemo(() => {
     const copy = [...folders];
     switch (sortMode) {
-      case "name":
+      case "name-asc":
         copy.sort((a, b) => a.name.localeCompare(b.name, "ja"));
         break;
-      case "created-desc":
-        copy.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        break;
-      case "created-asc":
-        copy.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      case "name-desc":
+        copy.sort((a, b) => b.name.localeCompare(a.name, "ja"));
         break;
       default:
         copy.sort((a, b) => a.order - b.order);
@@ -201,9 +198,8 @@ export function FolderPanel({
           onChange={(e) => onSortModeChange(e.target.value as FolderSortMode)}
         >
           <option value="custom">任意の順序</option>
-          <option value="name">名前順</option>
-          <option value="created-desc">作成日（新しい順）</option>
-          <option value="created-asc">作成日（古い順）</option>
+          <option value="name-asc">名前順↑</option>
+          <option value="name-desc">名前順↓</option>
         </select>
       </div>
 
