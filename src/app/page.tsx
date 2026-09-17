@@ -19,6 +19,7 @@ import { ItemForm, type ItemFormValues } from "@/components/items/ItemForm";
 import { FolderPanel, type FolderSortMode } from "@/components/folders/FolderPanel";
 import { CreateFolderDialog } from "@/components/folders/CreateFolderDialog";
 import { TagPanel } from "@/components/tags/TagPanel";
+import { AiToolPanel } from "@/components/aiTools/AiToolPanel";
 import { FilterBar, defaultFilters, type Filters } from "@/components/FilterBar";
 import { Pagination } from "@/components/Pagination";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -33,6 +34,7 @@ export default function Home() {
   const [items, setItems] = useState<IndexEntry[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [tags, setTags] = useState<string[]>([]);
+  const [aiTools, setAiTools] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,6 +43,7 @@ export default function Home() {
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [editing, setEditing] = useState<EditingState>({ mode: "closed" });
   const [showTagManager, setShowTagManager] = useState(false);
+  const [showAiToolManager, setShowAiToolManager] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
@@ -104,14 +107,16 @@ export default function Home() {
   // 保ったまま裏で更新する（エフェクト内での同期的setStateを避ける意味もある）。
   const reload = async () => {
     try {
-      const [itemsRes, foldersRes, tagsRes] = await Promise.all([
+      const [itemsRes, foldersRes, tagsRes, aiToolsRes] = await Promise.all([
         apiGet<{ items: IndexEntry[] }>("/api/items"),
         apiGet<{ folders: Folder[] }>("/api/folders"),
         apiGet<{ tags: string[] }>("/api/tags"),
+        apiGet<{ aiTools: string[] }>("/api/ai-tools"),
       ]);
       setItems(itemsRes.items);
       setFolders(foldersRes.folders);
       setTags(tagsRes.tags);
+      setAiTools(aiToolsRes.aiTools);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "読み込みに失敗しました");
@@ -360,6 +365,22 @@ export default function Home() {
     await reload();
   };
 
+  // --- AIツール handlers ---
+
+  const handleCreateAiTool = async (name: string) => {
+    await apiSend("/api/ai-tools", "POST", { name });
+    await reload();
+  };
+  const handleRenameAiTool = async (oldName: string, newName: string) => {
+    await apiSend("/api/ai-tools", "PATCH", { oldName, newName });
+    await reload();
+  };
+  const handleDeleteAiTool = async (name: string) => {
+    if (!window.confirm(`AIツール「${name}」を選択肢から削除しますか？`)) return;
+    await apiSend("/api/ai-tools", "DELETE", { name });
+    await reload();
+  };
+
   const handleExport = async () => {
     const supabase = createClient();
     const {
@@ -409,6 +430,26 @@ export default function Home() {
         emptyFolderCount={emptyFolderIds.length}
         onDeleteEmptyFolders={handleDeleteEmptyFolders}
       />
+
+      <div>
+        <button
+          type="button"
+          className="text-sm underline"
+          onClick={() => setShowAiToolManager((v) => !v)}
+        >
+          {showAiToolManager ? "AIツール管理を閉じる" : "AIツール管理を開く"}
+        </button>
+        {showAiToolManager && (
+          <div className="mt-2">
+            <AiToolPanel
+              aiTools={aiTools}
+              onCreate={handleCreateAiTool}
+              onRename={handleRenameAiTool}
+              onDelete={handleDeleteAiTool}
+            />
+          </div>
+        )}
+      </div>
 
       <div>
         <button
@@ -523,6 +564,7 @@ export default function Home() {
               }
               folders={folders}
               availableTags={tags}
+              availableAiTools={aiTools}
               onCancel={() => {
                 setEditing({ mode: "closed" });
                 setPendingShareUrl(null);

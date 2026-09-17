@@ -3,6 +3,7 @@ import { getVerifiedUserId } from "@/lib/auth/verify";
 import { createItem, listIndex, type NewItemInput } from "@/lib/kv/items";
 import { listFolders } from "@/lib/kv/folders";
 import { ensureTagsRegistered } from "@/lib/kv/tags";
+import { ensureAiToolsRegistered } from "@/lib/kv/aiTools";
 import { CONTENT_MAX_LENGTH } from "@/lib/constants";
 
 export async function GET(request: Request) {
@@ -79,6 +80,9 @@ export async function POST(request: Request) {
   const item = await createItem(userId, { ...input, folderId });
   if (item.tags.length > 0) {
     await ensureTagsRegistered(userId, item.tags);
+  }
+  if (item.aiTool.trim() !== "") {
+    await ensureAiToolsRegistered(userId, [item.aiTool]);
   }
   return NextResponse.json({ item }, { status: 201 });
 }

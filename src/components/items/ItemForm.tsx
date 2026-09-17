@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { AI_TOOL_PRESETS } from "@/lib/constants";
 import { detectAiToolFromUrl } from "@/lib/ai-tool-detect";
 import { apiGet } from "@/lib/api/client";
 
@@ -44,11 +43,19 @@ type Props = {
   initial?: Partial<ItemFormValues>;
   folders: Folder[];
   availableTags: string[];
+  availableAiTools: string[];
   onCancel: () => void;
   onSubmit: (values: ItemFormValues) => Promise<void>;
 };
 
-export function ItemForm({ initial, folders, availableTags, onCancel, onSubmit }: Props) {
+export function ItemForm({
+  initial,
+  folders,
+  availableTags,
+  availableAiTools,
+  onCancel,
+  onSubmit,
+}: Props) {
   const [values, setValues] = useState<ItemFormValues>({ ...emptyValues, ...initial });
   const [newTag, setNewTag] = useState("");
   const [saving, setSaving] = useState(false);
@@ -131,6 +138,11 @@ export function ItemForm({ initial, folders, availableTags, onCancel, onSubmit }
   // カスタムタグ(このアイテムに今追加したばかりのもの)もチップとして表示できるよう合成する。
   const tagOptions = [...availableTags, ...values.tags.filter((t) => !availableTags.includes(t))];
 
+  // 同様に、まだ登録されていない自由入力中のAIツール名もボタンとして選択できるよう合成する。
+  const aiToolOptions = values.aiTool && !availableAiTools.includes(values.aiTool)
+    ? [...availableAiTools, values.aiTool]
+    : availableAiTools;
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!values.shareUrl.trim()) {
@@ -208,7 +220,7 @@ export function ItemForm({ initial, folders, availableTags, onCancel, onSubmit }
       <div className="flex flex-col gap-1">
         <Label>AIツール</Label>
         <div className="flex flex-wrap gap-2">
-          {AI_TOOL_PRESETS.map((tool) => (
+          {aiToolOptions.map((tool) => (
             <button
               type="button"
               key={tool}

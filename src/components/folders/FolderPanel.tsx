@@ -125,22 +125,6 @@ export function FolderPanel({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-          フォルダ
-        </span>
-        <select
-          className="rounded-md border bg-background px-2 py-1 text-xs"
-          value={sortMode}
-          onChange={(e) => onSortModeChange(e.target.value as FolderSortMode)}
-        >
-          <option value="custom">任意の順序</option>
-          <option value="name">名前順</option>
-          <option value="created-desc">作成日（新しい順）</option>
-          <option value="created-asc">作成日（古い順）</option>
-        </select>
-      </div>
-
       <button
         type="button"
         onClick={() => onSelect("all")}
@@ -160,6 +144,22 @@ export function FolderPanel({
       >
         未分類
       </button>
+
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+          フォルダ
+        </span>
+        <select
+          className="rounded-md border bg-background px-2 py-1 text-xs"
+          value={sortMode}
+          onChange={(e) => onSortModeChange(e.target.value as FolderSortMode)}
+        >
+          <option value="custom">任意の順序</option>
+          <option value="name">名前順</option>
+          <option value="created-desc">作成日（新しい順）</option>
+          <option value="created-asc">作成日（古い順）</option>
+        </select>
+      </div>
 
       {sorted.map((folder, index) => (
         <div key={folder.id} className="flex flex-col gap-1">

@@ -3,6 +3,7 @@ import { getVerifiedUserId } from "@/lib/auth/verify";
 import { deleteItem, getItem, updateItem, type ItemPatch } from "@/lib/kv/items";
 import { listFolders } from "@/lib/kv/folders";
 import { ensureTagsRegistered } from "@/lib/kv/tags";
+import { ensureAiToolsRegistered } from "@/lib/kv/aiTools";
 import { CONTENT_MAX_LENGTH } from "@/lib/constants";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -78,6 +79,9 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   }
   if (patch.tags && patch.tags.length > 0) {
     await ensureTagsRegistered(userId, patch.tags);
+  }
+  if (patch.aiTool && patch.aiTool.trim() !== "") {
+    await ensureAiToolsRegistered(userId, [patch.aiTool]);
   }
 
   return NextResponse.json({ item: updated });
