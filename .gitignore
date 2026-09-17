@@ -1,5 +1,8 @@
 HANDOVER.md
 
+# Claude Code ローカル設定(Webhook URL等の秘密情報を含む)
+.claude/settings.local.json
+
 # dependencies
 /node_modules
 /.pnp
