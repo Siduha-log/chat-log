@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { PencilIcon, XIcon } from "lucide-react";
 import type { Folder } from "@/lib/kv/folders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -226,21 +227,23 @@ export function FolderPanel({
                 )}
                 <button
                   type="button"
-                  className="px-1.5 py-1 text-xs underline"
+                  aria-label="改名"
+                  className="px-1 py-1 text-muted-foreground hover:text-foreground"
                   onClick={() => {
                     setRenamingId(folder.id);
                     setRenameValue(folder.name);
                     setRenameError(null);
                   }}
                 >
-                  改名
+                  <PencilIcon className="size-3.5" />
                 </button>
                 <button
                   type="button"
-                  className="px-1.5 py-1 text-xs text-destructive underline"
+                  aria-label="削除"
+                  className="px-1 py-1 text-destructive"
                   onClick={() => onDelete(folder.id)}
                 >
-                  削除
+                  <XIcon className="size-3.5" />
                 </button>
               </>
             )}

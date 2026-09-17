@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { XIcon } from "lucide-react";
 import type { IndexEntry } from "@/lib/kv/items";
 import { Badge } from "@/components/ui/badge";
 
@@ -117,10 +118,11 @@ export function ItemTable({
                 </button>
                 <button
                   type="button"
-                  className="text-destructive underline"
+                  aria-label="削除"
+                  className="text-destructive"
                   onClick={() => onDelete(item.id)}
                 >
-                  削除
+                  <XIcon className="size-3.5" />
                 </button>
               </div>
             </div>

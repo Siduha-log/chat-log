@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PencilIcon, XIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,20 +48,22 @@ export function TagPanel({ tags, onCreate, onRename, onDelete }: Props) {
               <Badge variant="outline">#{tag}</Badge>
               <button
                 type="button"
-                className="text-xs underline"
+                aria-label="改名"
+                className="text-muted-foreground hover:text-foreground"
                 onClick={() => {
                   setRenaming(tag);
                   setRenameValue(tag);
                 }}
               >
-                改名
+                <PencilIcon className="size-3.5" />
               </button>
               <button
                 type="button"
-                className="text-xs text-destructive underline"
+                aria-label="削除"
+                className="text-destructive"
                 onClick={() => onDelete(tag)}
               >
-                削除
+                <XIcon className="size-3.5" />
               </button>
             </div>
           ),

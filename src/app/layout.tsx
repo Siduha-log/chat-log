@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   icons: {
     // iOSのapple-touch-iconはSVG非対応のため、appleはPNGのまま維持する
     // （plan.md 6.4章の既知の限界）。faviconのみSVGに切り替える。
-    icon: "/icon.svg?v=svg_override_1",
+    icon: "/icon.svg?v=svg_override_2",
     apple: "/icon.png",
   },
   appleWebApp: {
