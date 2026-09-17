@@ -1,5 +1,8 @@
 HANDOVER.md
 
+# claude code (Webhook等の秘密情報が含まれるため丸ごと除外)
+.claude/
+
 # dependencies
 /node_modules
 /.pnp
