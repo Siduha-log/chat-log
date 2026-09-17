@@ -5,7 +5,6 @@ import type { Folder } from "@/lib/kv/folders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { detectAiToolFromUrl } from "@/lib/ai-tool-detect";
 import { apiGet } from "@/lib/api/client";
@@ -161,7 +160,7 @@ export function ItemForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3 rounded-lg border p-4">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5 rounded-lg border-2 border-primary p-5">
       <div className="flex flex-col gap-1">
         <Label htmlFor="shareUrl">共有URL *</Label>
         <div className="flex gap-2">
@@ -294,14 +293,17 @@ export function ItemForm({
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <Checkbox
-          id="favorite"
-          checked={values.favorite}
-          onCheckedChange={(c) => setValues((v) => ({ ...v, favorite: c === true }))}
-        />
-        <Label htmlFor="favorite">お気に入りに登録</Label>
-      </div>
+      <button
+        type="button"
+        onClick={() => setValues((v) => ({ ...v, favorite: !v.favorite }))}
+        aria-pressed={values.favorite}
+        className="flex w-fit items-center gap-1.5 text-sm"
+      >
+        <span className="text-lg leading-none text-favorite">
+          {values.favorite ? "★" : "☆"}
+        </span>
+        お気に入り登録
+      </button>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 

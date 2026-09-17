@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,7 +65,7 @@ export function FilterBar({ filters, onChange, availableTags, availableAiTools }
   const advancedActive = hasActiveAdvancedFilters(filters);
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border p-3">
+    <div className="flex flex-col gap-4 rounded-lg border p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <div className="flex flex-1 flex-col gap-1">
           <Label htmlFor="search">検索</Label>
@@ -96,8 +95,8 @@ export function FilterBar({ filters, onChange, availableTags, availableAiTools }
       </div>
 
       {expanded && (
-        <div className="flex flex-col gap-3 border-t pt-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="flex flex-col gap-5 border-t pt-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:gap-6">
             <div className="flex flex-col gap-1">
               <Label htmlFor="aitool-filter">AIツール</Label>
               <select
@@ -151,12 +150,17 @@ export function FilterBar({ filters, onChange, availableTags, availableAiTools }
             </div>
 
             <div className="flex items-center gap-2 pb-2">
-              <Checkbox
-                id="favorite-only"
-                checked={filters.favoriteOnly}
-                onCheckedChange={(c) => set("favoriteOnly", c === true)}
-              />
-              <Label htmlFor="favorite-only">★のみ</Label>
+              <button
+                type="button"
+                onClick={() => set("favoriteOnly", !filters.favoriteOnly)}
+                aria-pressed={filters.favoriteOnly}
+                className="flex items-center gap-1.5 text-sm"
+              >
+                <span className="text-lg leading-none text-favorite">
+                  {filters.favoriteOnly ? "★" : "☆"}
+                </span>
+                お気に入り登録
+              </button>
             </div>
           </div>
 
