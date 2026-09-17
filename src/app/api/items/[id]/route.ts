@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getVerifiedUserId } from "@/lib/auth/verify";
 import { deleteItem, getItem, updateItem, type ItemPatch } from "@/lib/kv/items";
 import { listFolders } from "@/lib/kv/folders";
+import { ensureTagsRegistered } from "@/lib/kv/tags";
 import { CONTENT_MAX_LENGTH } from "@/lib/constants";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -74,6 +75,9 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   const updated = await updateItem(userId, id, patch);
   if (!updated) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+  if (patch.tags && patch.tags.length > 0) {
+    await ensureTagsRegistered(userId, patch.tags);
   }
 
   return NextResponse.json({ item: updated });

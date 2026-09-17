@@ -35,6 +35,20 @@ export async function addTag(userId: string, name: string): Promise<string[]> {
   return tags;
 }
 
+// アイテムの作成・更新で使われたタグを、ユーザーのタグ一覧に自動登録する。
+// これをしないと、新規作成/編集モーダルでその場限り入力したタグが
+// アイテムには保存されるが一覧の選択肢には出てこず、他のアイテムで
+// 再利用できない（「タグを追加できない」ように見える不具合の原因）。
+export async function ensureTagsRegistered(
+  userId: string,
+  names: string[],
+): Promise<void> {
+  const tags = await listTags(userId);
+  const newNames = names.filter((n) => n.trim() !== "" && !tags.includes(n));
+  if (newNames.length === 0) return;
+  await saveTags(userId, [...tags, ...newNames]);
+}
+
 export async function renameTag(
   userId: string,
   oldName: string,
