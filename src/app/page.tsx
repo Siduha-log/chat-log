@@ -58,6 +58,11 @@ export default function Home() {
   const [contentMatchIds, setContentMatchIds] = useState<Set<string> | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 新規作成/編集フォームを開く直前のスクロール位置。保存/キャンセル時に
+  // ここへ画面を押し戻す（4章 スクロールバック機能）。
+  const savedScrollYRef = useRef<number | null>(null);
+  const itemFormRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     const q = filters.query.trim();
     if (searchTimer.current) clearTimeout(searchTimer.current);
@@ -148,6 +153,13 @@ export default function Home() {
     if (authChecked) reload();
   }, [authChecked]);
 
+  // 編集ボタン押下時、新規作成/編集領域へ自動スクロールする（4章）。
+  useEffect(() => {
+    if (editing.mode === "edit") {
+      itemFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [editing]);
+
   const availableAiTools = useMemo(
     () => Array.from(new Set(items.map((i) => i.aiTool).filter(Boolean))).sort(),
     [items],
@@ -200,7 +212,6 @@ export default function Home() {
         (i) =>
           i.title.toLowerCase().includes(q) ||
           i.memo.toLowerCase().includes(q) ||
-          i.tags.some((t) => t.toLowerCase().includes(q)) ||
           i.aiTool.toLowerCase().includes(q) ||
           i.contentSnippet.toLowerCase().includes(q) ||
           (contentMatchIds?.has(i.id) ?? false),
@@ -246,18 +257,28 @@ export default function Home() {
 
   // --- item handlers ---
 
+  // 新規作成/編集フォームを閉じ、開く前のスクロール位置へ画面を戻す。
+  const closeEditingAndRestoreScroll = () => {
+    setEditing({ mode: "closed" });
+    setPendingShareUrl(null);
+    if (savedScrollYRef.current !== null) {
+      window.scrollTo({ top: savedScrollYRef.current, behavior: "smooth" });
+      savedScrollYRef.current = null;
+    }
+  };
+
   const handleCreateOrUpdateItem = async (values: ItemFormValues) => {
     if (editing.mode === "edit") {
       await apiSend(`/api/items/${editing.item.id}`, "PATCH", values);
     } else {
       await apiSend("/api/items", "POST", values);
     }
-    setEditing({ mode: "closed" });
-    setPendingShareUrl(null);
+    closeEditingAndRestoreScroll();
     await reload();
   };
 
   const startEdit = async (id: string) => {
+    savedScrollYRef.current = window.scrollY;
     const { item } = await apiGet<{ item: LinkItem }>(`/api/items/${id}`);
     setEditing({ mode: "edit", item });
   };
@@ -544,7 +565,12 @@ export default function Home() {
           <Button
             variant={editing.mode === "new" ? "outline" : "default"}
             onClick={() => {
-              setEditing((cur) => (cur.mode === "new" ? { mode: "closed" } : { mode: "new" }));
+              if (editing.mode === "new") {
+                closeEditingAndRestoreScroll();
+                return;
+              }
+              savedScrollYRef.current = window.scrollY;
+              setEditing({ mode: "new" });
               setPendingShareUrl(null);
             }}
             className="self-start"
@@ -553,24 +579,23 @@ export default function Home() {
           </Button>
 
           {editing.mode !== "closed" && (
-            <ItemForm
-              key={editing.mode === "edit" ? editing.item.id : "new"}
-              initial={
-                editing.mode === "edit"
-                  ? editing.item
-                  : pendingShareUrl
-                    ? { shareUrl: pendingShareUrl }
-                    : undefined
-              }
-              folders={folders}
-              availableTags={tags}
-              availableAiTools={aiTools}
-              onCancel={() => {
-                setEditing({ mode: "closed" });
-                setPendingShareUrl(null);
-              }}
-              onSubmit={handleCreateOrUpdateItem}
-            />
+            <div ref={itemFormRef}>
+              <ItemForm
+                key={editing.mode === "edit" ? editing.item.id : "new"}
+                initial={
+                  editing.mode === "edit"
+                    ? editing.item
+                    : pendingShareUrl
+                      ? { shareUrl: pendingShareUrl }
+                      : undefined
+                }
+                folders={folders}
+                availableTags={tags}
+                availableAiTools={aiTools}
+                onCancel={closeEditingAndRestoreScroll}
+                onSubmit={handleCreateOrUpdateItem}
+              />
+            </div>
           )}
 
           <FilterBar

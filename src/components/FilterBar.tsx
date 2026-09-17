@@ -82,7 +82,7 @@ export function FilterBar({ filters, onChange, availableTags, availableAiTools }
           <Label htmlFor="search">検索</Label>
           <Input
             id="search"
-            placeholder="タイトル・メモ・タグ・本文で検索"
+            placeholder="タイトル・メモ・本文で検索"
             value={filters.query}
             onChange={(e) => set("query", e.target.value)}
           />
