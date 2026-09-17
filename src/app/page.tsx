@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Download, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { apiGet, apiSend } from "@/lib/api/client";
 import type { IndexEntry, LinkItem } from "@/lib/kv/items";
@@ -500,7 +501,7 @@ export default function Home() {
 
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-4 p-3 sm:p-4 lg:px-6">
-      <header className="flex items-center justify-between gap-2">
+      <header className="flex items-center justify-between gap-2 pr-4 sm:pr-6">
         <div className="flex items-center gap-2">
           <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
             <SheetTrigger
@@ -515,11 +516,14 @@ export default function Home() {
             >
               ☰
             </SheetTrigger>
-            <SheetContent side="left" className="w-72 gap-0 p-4 pt-14">
+            <SheetContent
+              side="left"
+              className="gap-0 overflow-x-hidden p-4 pt-14 data-[side=left]:w-auto data-[side=left]:max-w-[92vw] data-[side=left]:sm:max-w-[92vw]"
+            >
               <SheetHeader className="sr-only">
                 <SheetTitle>フォルダ</SheetTitle>
               </SheetHeader>
-              {sidebarContent}
+              <ResizableSidebar>{sidebarContent}</ResizableSidebar>
             </SheetContent>
           </Sheet>
           <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
@@ -545,11 +549,13 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <Button variant="outline" size="sm" onClick={handleExport}>
-            エクスポート
+          <Button variant="outline" size="sm" className="gap-1.5" aria-label="エクスポート" onClick={handleExport}>
+            <Download className="size-4" />
+            <span className="hidden sm:inline">エクスポート</span>
           </Button>
-          <Button variant="outline" size="sm" onClick={handleLogout}>
-            ログアウト
+          <Button variant="outline" size="sm" className="gap-1.5" aria-label="ログアウト" onClick={handleLogout}>
+            <LogOut className="size-4" />
+            <span className="hidden sm:inline">ログアウト</span>
           </Button>
         </div>
       </header>

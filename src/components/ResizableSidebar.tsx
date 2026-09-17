@@ -7,13 +7,23 @@ const DEFAULT_WIDTH = 320; // 20rem
 const MIN_WIDTH = 200;
 const MAX_WIDTH = 640;
 
+// スマホ画面（Sheet経由での表示）でサイドバーが画面外にはみ出さないよう、
+// 実際のビューポート幅の90%も上限に含める。
+function clamp(width: number): number {
+  const viewportCap =
+    typeof window !== "undefined" ? window.innerWidth * 0.9 : MAX_WIDTH;
+  const effectiveMax = Math.min(MAX_WIDTH, viewportCap);
+  return Math.min(effectiveMax, Math.max(MIN_WIDTH, width));
+}
+
 function readStoredWidth(): number {
   if (typeof window === "undefined") return DEFAULT_WIDTH;
   try {
     const stored = Number(localStorage.getItem(STORAGE_KEY));
-    return stored >= MIN_WIDTH && stored <= MAX_WIDTH ? stored : DEFAULT_WIDTH;
+    const initial = stored >= MIN_WIDTH && stored <= MAX_WIDTH ? stored : DEFAULT_WIDTH;
+    return clamp(initial);
   } catch {
-    return DEFAULT_WIDTH;
+    return clamp(DEFAULT_WIDTH);
   }
 }
 
@@ -23,10 +33,6 @@ function saveWidth(width: number) {
   } catch {
     // プライベートブラウジング等でlocalStorageが使えなくても、幅の変更自体は動作させる
   }
-}
-
-function clamp(width: number): number {
-  return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, width));
 }
 
 type Props = {
