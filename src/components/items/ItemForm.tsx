@@ -127,6 +127,10 @@ export function ItemForm({ initial, folders, availableTags, onCancel, onSubmit }
     setNewTag("");
   };
 
+  // availableTagsは既存の登録済みタグ一覧のみを含むため、まだ登録されていない
+  // カスタムタグ(このアイテムに今追加したばかりのもの)もチップとして表示できるよう合成する。
+  const tagOptions = [...availableTags, ...values.tags.filter((t) => !availableTags.includes(t))];
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!values.shareUrl.trim()) {
@@ -247,7 +251,7 @@ export function ItemForm({ initial, folders, availableTags, onCancel, onSubmit }
       <div className="flex flex-col gap-1">
         <Label>タグ</Label>
         <div className="flex flex-wrap gap-2">
-          {availableTags.map((tag) => (
+          {tagOptions.map((tag) => (
             <button
               type="button"
               key={tag}
