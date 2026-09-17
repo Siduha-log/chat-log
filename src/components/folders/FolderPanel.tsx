@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { PencilIcon, XIcon } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { GripVerticalIcon, PencilIcon, XIcon } from "lucide-react";
 import type { Folder } from "@/lib/kv/folders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +65,8 @@ export function FolderPanel({
   const [renameValue, setRenameValue] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | "unfiled" | null>(null);
+  const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
+  const [folderDropTarget, setFolderDropTarget] = useState<string | null>(null);
 
   const sorted = useMemo(() => {
     const copy = [...folders];
@@ -84,14 +86,57 @@ export function FolderPanel({
     return copy;
   }, [folders, sortMode]);
 
-  const move = async (index: number, direction: "up" | "down") => {
-    if (sortMode !== "custom") return;
-    const target = direction === "up" ? index - 1 : index + 1;
-    if (target < 0 || target >= sorted.length) return;
+  const handleFolderDrop = async (draggedId: string, targetId: string) => {
+    if (draggedId === targetId) return;
+    const fromIndex = sorted.findIndex((f) => f.id === draggedId);
+    const toIndex = sorted.findIndex((f) => f.id === targetId);
+    if (fromIndex === -1 || toIndex === -1) return;
     const next = [...sorted];
-    [next[index], next[target]] = [next[target], next[index]];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
     await onReorder(next.map((f) => f.id));
   };
+
+  // フォルダ並び替えのD&Dはマウス/タッチ双方で動かすため、Pointer Eventsで実装する
+  // （HTML5ネイティブDnD = draggable/onDragStart等はモバイルブラウザで発火しないため使えない）。
+  useEffect(() => {
+    if (!draggedFolderId) return;
+    const draggedId = draggedFolderId;
+
+    const targetIdAt = (x: number, y: number) => {
+      const row = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-folder-row-id]");
+      return row?.dataset.folderRowId ?? null;
+    };
+
+    const handleMove = (e: PointerEvent) => {
+      const targetId = targetIdAt(e.clientX, e.clientY);
+      setFolderDropTarget(targetId && targetId !== draggedId ? targetId : null);
+    };
+
+    const handleUp = (e: PointerEvent) => {
+      const targetId = targetIdAt(e.clientX, e.clientY);
+      setDraggedFolderId(null);
+      setFolderDropTarget(null);
+      if (targetId && targetId !== draggedId) {
+        handleFolderDrop(draggedId, targetId);
+      }
+    };
+
+    const handleCancel = () => {
+      setDraggedFolderId(null);
+      setFolderDropTarget(null);
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleCancel);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleCancel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draggedFolderId]);
 
   const submitNewFolder = async () => {
     const err = validateFolderName(newName);
@@ -162,9 +207,13 @@ export function FolderPanel({
         </select>
       </div>
 
-      {sorted.map((folder, index) => (
-        <div key={folder.id} className="flex flex-col gap-1">
-          <div className="flex items-center gap-1">
+      {sorted.map((folder) => (
+        <div key={folder.id} className="flex flex-col gap-1" data-folder-row-id={folder.id}>
+          <div
+            className={`flex items-center gap-1 rounded-lg transition-colors ${
+              folderDropTarget === folder.id ? "ring-2 ring-primary" : ""
+            } ${draggedFolderId === folder.id ? "opacity-40" : ""}`}
+          >
             {renamingId === folder.id ? (
               <>
                 <Input
@@ -204,26 +253,18 @@ export function FolderPanel({
                   📁 {folder.name}
                 </button>
                 {sortMode === "custom" && (
-                  <>
-                    <button
-                      type="button"
-                      aria-label="上へ"
-                      className="px-1.5 py-1 text-xs disabled:opacity-30"
-                      disabled={index === 0}
-                      onClick={() => move(index, "up")}
-                    >
-                      ▲
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="下へ"
-                      className="px-1.5 py-1 text-xs disabled:opacity-30"
-                      disabled={index === sorted.length - 1}
-                      onClick={() => move(index, "down")}
-                    >
-                      ▼
-                    </button>
-                  </>
+                  <span
+                    role="button"
+                    aria-label="ドラッグして並び替え"
+                    tabIndex={-1}
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      setDraggedFolderId(folder.id);
+                    }}
+                    className="touch-none cursor-grab px-2 py-2 text-muted-foreground active:cursor-grabbing"
+                  >
+                    <GripVerticalIcon className="size-3.5" />
+                  </span>
                 )}
                 <button
                   type="button"
