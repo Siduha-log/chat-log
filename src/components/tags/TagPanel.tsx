@@ -19,9 +19,6 @@ export function TagPanel({ tags, onCreate, onRename, onDelete }: Props) {
 
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        タグ管理
-      </span>
       <div className="flex flex-wrap gap-2">
         {tags.map((tag) =>
           renaming === tag ? (

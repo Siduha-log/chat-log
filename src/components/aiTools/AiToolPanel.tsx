@@ -19,9 +19,6 @@ export function AiToolPanel({ aiTools, onCreate, onRename, onDelete }: Props) {
 
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        AIツール管理
-      </span>
       <div className="flex flex-wrap gap-2">
         {aiTools.map((tool) =>
           renaming === tool ? (

@@ -62,6 +62,17 @@ export function FilterBar({ filters, onChange, availableTags, availableAiTools }
     );
   };
 
+  const clearAdvancedFilters = () => {
+    onChange({
+      ...filters,
+      tags: defaultFilters.tags,
+      aiTool: defaultFilters.aiTool,
+      favoriteOnly: defaultFilters.favoriteOnly,
+      dateFrom: defaultFilters.dateFrom,
+      dateTo: defaultFilters.dateTo,
+    });
+  };
+
   const advancedActive = hasActiveAdvancedFilters(filters);
 
   return (
@@ -193,6 +204,18 @@ export function FilterBar({ filters, onChange, availableTags, availableAiTools }
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {advancedActive && (
+            <div className="flex justify-start">
+              <button
+                type="button"
+                onClick={clearAdvancedFilters}
+                className="inline-flex h-5 w-fit shrink-0 items-center justify-center rounded-4xl bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/70"
+              >
+                絞り込み全解除
+              </button>
             </div>
           )}
         </div>
