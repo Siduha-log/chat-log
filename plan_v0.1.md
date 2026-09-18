@@ -189,18 +189,26 @@
 ## フェーズF: 認証方式の刷新（パスキー＋マジックリンク化）
 
 現状: Google/GitHub/X の OAuth + メールアドレス/パスワード認証（Supabase Auth、`src/app/login/page.tsx`）。
-変更方針: サードパーティ連携＋パスキーを基本構成とし、パスキーを忘れた場合はメールアドレス宛のマジックリンクでログインできる構成に変更する。
+変更方針: サードパーティ連携＋パスキーを基本構成とし、マジックリンクは「パスキーを忘れた場合」に加えて「サードパーティ連携（OAuth）がうまくいかなかった場合」の救済措置としても使えるように構成する（パスキー用の代替手段に限定しない）。
 
 ### タスク10: パスキー（WebAuthn）対応状況の調査
 - 内容: 現行 `@supabase/supabase-js@2.116` 系でのパスキーネイティブ対応状況を調査する。対応していない場合は代替手段（自前WebAuthn実装 or 他ライブラリ）を検討し、方針を決定する
-- ステータス: 未着手
+- ステータス: 完了
+- 調査結果:
+  - Supabase Authは2026年5月に「Passkeys for Supabase Auth (Beta)」を発表しており、`@supabase/supabase-js` v2.105.0以降でネイティブ対応済み。本プロジェクトの導入バージョンは2.116.0のため**対応要件を満たしており、ライブラリの追加・変更は不要**
+  - クライアントAPI: 登録`auth.registerPasskey()`、ログイン`auth.signInWithPasskey()`、管理`auth.passkey.list()`/`update()`/`delete()`。利用にはクライアント初期化時に`experimental: { passkey: true }`のオプトインが必要
+  - サーバー側設定: Supabaseダッシュボードの「Authentication → Passkeys」で有効化し、Relying Party Display Name・Relying Party ID（本番ドメイン）・Relying Party Origins（許可オリジン、最大5件）を設定する必要がある
+  - 既知の制限: SSO経由・匿名ユーザーはパスキー登録不可。Relying Party IDを後から変更すると既存の全パスキーが失効する
+  - **現在のステータスは「experimental（実験的機能）」**で、公式ドキュメントに「APIは予告なく変更される可能性がある」旨の明記あり
+- 方針決定: 自前WebAuthn実装や他ライブラリ導入は不要。**Supabase Authのネイティブパスキー機能（experimental）をそのまま採用**し、タスク11で実装する。ただしexperimental機能である点は認識した上で進める（将来のSDKアップデートでAPIが変わる可能性を留意）
+- 参考: [Passkeys for Supabase Auth (Beta) · Changelog](https://supabase.com/changelog/46458-passkeys-for-supabase-auth-beta) / [Passkey authentication | Supabase Docs](https://supabase.com/docs/guides/auth/passkeys)
 
 ### タスク11: パスキー登録・ログインUIの実装
 - 内容: 調査結果に基づき、OAuthボタンと並べてパスキー登録・ログインの導線を実装する
 - ステータス: 未着手（タスク10の結果待ち）
 
 ### タスク12: メール+パスワード認証の廃止とマジックリンク導線への置き換え
-- 内容: 現行のメールアドレス/パスワードログインフォームを廃止し、「パスキーを忘れた場合」の導線からマジックリンク送信フォームに置き換える
+- 内容: 現行のメールアドレス/パスワードログインフォームを廃止し、マジックリンク送信フォームに置き換える。導線は「パスキーを忘れた場合」に加えて、「サードパーティ連携（OAuth）がうまくいかなかった場合」の救済措置としても機能させる（例:「ログインでお困りの場合」等、両方のケースをカバーする文言・導線にする）
 - ステータス: 未着手
 
 ### タスク13: 既存パスワード認証関連コードの整理
