@@ -21,7 +21,12 @@ export function TagPanel({ tags, onCreate, onRename, onDelete, onChangeColor }: 
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [expandedTag, setExpandedTag] = useState<string | null>(null);
-  const [pickingColorFor, setPickingColorFor] = useState<string | null>(null);
+  const [hoveredTag, setHoveredTag] = useState<string | null>(null);
+  const [pickingColorFor, setPickingColorFor] = useState(false);
+
+  // クリックで固定表示中のタグを優先し、なければホバー中のタグをプレビュー表示する
+  const activeTagName = expandedTag ?? hoveredTag;
+  const activeTag = tags.find((t) => t.name === activeTagName) ?? null;
 
   return (
     <div className="flex flex-col gap-2">
@@ -50,96 +55,103 @@ export function TagPanel({ tags, onCreate, onRename, onDelete, onChangeColor }: 
               </Button>
             </div>
           ) : (
-            <div
+            <button
               key={tag.name}
-              className="group flex flex-col gap-1"
-              onTouchStart={() => {}}
+              type="button"
+              onMouseEnter={() => setHoveredTag(tag.name)}
+              onMouseLeave={() => setHoveredTag((cur) => (cur === tag.name ? null : cur))}
+              onClick={() =>
+                setExpandedTag((cur) => {
+                  const next = cur === tag.name ? null : tag.name;
+                  if (next !== tag.name) setPickingColorFor(false);
+                  return next;
+                })
+              }
             >
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setExpandedTag((cur) => {
-                      const next = cur === tag.name ? null : tag.name;
-                      if (next !== tag.name) setPickingColorFor(null);
-                      return next;
-                    })
-                  }
-                >
-                  <Badge
-                    variant="outline"
-                    style={{
-                      backgroundColor: getTagColorSwatch(tag.color).bg,
-                      color: getTagColorSwatch(tag.color).text,
-                      borderColor: "transparent",
-                    }}
-                    className={expandedTag === tag.name ? "ring-2 ring-primary" : ""}
-                  >
-                    #{tag.name}
-                  </Badge>
-                </button>
-                <div
-                  className={`items-center gap-1 group-hover:flex group-active:flex ${
-                    expandedTag === tag.name ? "flex" : "hidden"
-                  }`}
-                >
-                  <button
-                    type="button"
-                    aria-label="色を変更"
-                    className="text-muted-foreground hover:text-foreground"
-                    onClick={() =>
-                      setPickingColorFor((cur) => (cur === tag.name ? null : tag.name))
-                    }
-                  >
-                    <PaletteIcon className="size-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="改名"
-                    className="text-muted-foreground hover:text-foreground"
-                    onClick={() => {
-                      setRenaming(tag.name);
-                      setRenameValue(tag.name);
-                    }}
-                  >
-                    <PencilIcon className="size-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="削除"
-                    className="text-destructive"
-                    onClick={() => onDelete(tag.name)}
-                  >
-                    <XIcon className="size-3.5" />
-                  </button>
-                </div>
-              </div>
-              {pickingColorFor === tag.name && (
-                <div className="flex flex-wrap gap-1 rounded-md border bg-muted/40 p-1.5">
-                  {TAG_COLOR_PALETTE.map((swatch) => (
-                    <button
-                      key={swatch.id}
-                      type="button"
-                      aria-label={swatch.label}
-                      title={swatch.label}
-                      onClick={async () => {
-                        await onChangeColor(tag.name, swatch.id);
-                        setPickingColorFor(null);
-                      }}
-                      className={`size-5 rounded-full border transition-transform ${
-                        tag.color === swatch.id
-                          ? "ring-2 ring-primary ring-offset-1 ring-offset-background"
-                          : "border-border"
-                      }`}
-                      style={{ backgroundColor: swatch.bg }}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+              <Badge
+                variant="outline"
+                style={{
+                  backgroundColor: getTagColorSwatch(tag.color).bg,
+                  color: getTagColorSwatch(tag.color).text,
+                  borderColor: "transparent",
+                }}
+                className={activeTagName === tag.name ? "ring-2 ring-primary" : ""}
+              >
+                #{tag.name}
+              </Badge>
+            </button>
           ),
         )}
       </div>
+
+      {/* タグ一覧の折り返しレイアウトに操作アイコンを混ぜるとホバー時にちらつくため、
+          選択中のタグの操作は一覧とは別のこの専用エリアにまとめて表示する */}
+      {activeTag && (
+        <div className="flex flex-col gap-1.5 rounded-md border bg-muted/40 p-2">
+          <div className="flex items-center gap-2">
+            <Badge
+              variant="outline"
+              style={{
+                backgroundColor: getTagColorSwatch(activeTag.color).bg,
+                color: getTagColorSwatch(activeTag.color).text,
+                borderColor: "transparent",
+              }}
+            >
+              #{activeTag.name}
+            </Badge>
+            <button
+              type="button"
+              aria-label="色を変更"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={() => setPickingColorFor((v) => !v)}
+            >
+              <PaletteIcon className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              aria-label="改名"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                setRenaming(activeTag.name);
+                setRenameValue(activeTag.name);
+              }}
+            >
+              <PencilIcon className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              aria-label="削除"
+              className="text-destructive"
+              onClick={() => onDelete(activeTag.name)}
+            >
+              <XIcon className="size-3.5" />
+            </button>
+          </div>
+          {pickingColorFor && (
+            <div className="flex flex-wrap gap-1">
+              {TAG_COLOR_PALETTE.map((swatch) => (
+                <button
+                  key={swatch.id}
+                  type="button"
+                  aria-label={swatch.label}
+                  title={swatch.label}
+                  onClick={async () => {
+                    await onChangeColor(activeTag.name, swatch.id);
+                    setPickingColorFor(false);
+                  }}
+                  className={`size-5 rounded-full border transition-transform ${
+                    activeTag.color === swatch.id
+                      ? "ring-2 ring-primary ring-offset-1 ring-offset-background"
+                      : "border-border"
+                  }`}
+                  style={{ backgroundColor: swatch.bg }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex gap-2">
         <Input
           placeholder="新しいタグ"

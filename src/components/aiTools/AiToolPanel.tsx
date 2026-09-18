@@ -21,7 +21,12 @@ export function AiToolPanel({ aiTools, onCreate, onRename, onDelete, onChangeCol
   const [renaming, setRenaming] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [expandedTool, setExpandedTool] = useState<string | null>(null);
-  const [pickingColorFor, setPickingColorFor] = useState<string | null>(null);
+  const [hoveredTool, setHoveredTool] = useState<string | null>(null);
+  const [pickingColorFor, setPickingColorFor] = useState(false);
+
+  // クリックで固定表示中のツールを優先し、なければホバー中のツールをプレビュー表示する
+  const activeToolName = expandedTool ?? hoveredTool;
+  const activeTool = aiTools.find((t) => t.name === activeToolName) ?? null;
 
   return (
     <div className="flex flex-col gap-2">
@@ -50,96 +55,103 @@ export function AiToolPanel({ aiTools, onCreate, onRename, onDelete, onChangeCol
               </Button>
             </div>
           ) : (
-            <div
+            <button
               key={tool.name}
-              className="group flex flex-col gap-1"
-              onTouchStart={() => {}}
+              type="button"
+              onMouseEnter={() => setHoveredTool(tool.name)}
+              onMouseLeave={() => setHoveredTool((cur) => (cur === tool.name ? null : cur))}
+              onClick={() =>
+                setExpandedTool((cur) => {
+                  const next = cur === tool.name ? null : tool.name;
+                  if (next !== tool.name) setPickingColorFor(false);
+                  return next;
+                })
+              }
             >
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setExpandedTool((cur) => {
-                      const next = cur === tool.name ? null : tool.name;
-                      if (next !== tool.name) setPickingColorFor(null);
-                      return next;
-                    })
-                  }
-                >
-                  <Badge
-                    variant="outline"
-                    style={{
-                      backgroundColor: getAiToolColorSwatch(tool.color).bg,
-                      color: getAiToolColorSwatch(tool.color).text,
-                      borderColor: "transparent",
-                    }}
-                    className={expandedTool === tool.name ? "ring-2 ring-primary" : ""}
-                  >
-                    {tool.name}
-                  </Badge>
-                </button>
-                <div
-                  className={`items-center gap-1 group-hover:flex group-active:flex ${
-                    expandedTool === tool.name ? "flex" : "hidden"
-                  }`}
-                >
-                  <button
-                    type="button"
-                    aria-label="色を変更"
-                    className="text-muted-foreground hover:text-foreground"
-                    onClick={() =>
-                      setPickingColorFor((cur) => (cur === tool.name ? null : tool.name))
-                    }
-                  >
-                    <PaletteIcon className="size-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="改名"
-                    className="text-muted-foreground hover:text-foreground"
-                    onClick={() => {
-                      setRenaming(tool.name);
-                      setRenameValue(tool.name);
-                    }}
-                  >
-                    <PencilIcon className="size-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="削除"
-                    className="text-destructive"
-                    onClick={() => onDelete(tool.name)}
-                  >
-                    <XIcon className="size-3.5" />
-                  </button>
-                </div>
-              </div>
-              {pickingColorFor === tool.name && (
-                <div className="flex flex-wrap gap-1 rounded-md border bg-muted/40 p-1.5">
-                  {AI_TOOL_COLOR_PALETTE.map((swatch) => (
-                    <button
-                      key={swatch.id}
-                      type="button"
-                      aria-label={swatch.label}
-                      title={swatch.label}
-                      onClick={async () => {
-                        await onChangeColor(tool.name, swatch.id);
-                        setPickingColorFor(null);
-                      }}
-                      className={`size-5 rounded-full border transition-transform ${
-                        tool.color === swatch.id
-                          ? "ring-2 ring-primary ring-offset-1 ring-offset-background"
-                          : "border-border"
-                      }`}
-                      style={{ backgroundColor: swatch.bg }}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+              <Badge
+                variant="outline"
+                style={{
+                  backgroundColor: getAiToolColorSwatch(tool.color).bg,
+                  color: getAiToolColorSwatch(tool.color).text,
+                  borderColor: "transparent",
+                }}
+                className={activeToolName === tool.name ? "ring-2 ring-primary" : ""}
+              >
+                {tool.name}
+              </Badge>
+            </button>
           ),
         )}
       </div>
+
+      {/* AIツール一覧の折り返しレイアウトに操作アイコンを混ぜるとホバー時にちらつくため、
+          選択中のツールの操作は一覧とは別のこの専用エリアにまとめて表示する */}
+      {activeTool && (
+        <div className="flex flex-col gap-1.5 rounded-md border bg-muted/40 p-2">
+          <div className="flex items-center gap-2">
+            <Badge
+              variant="outline"
+              style={{
+                backgroundColor: getAiToolColorSwatch(activeTool.color).bg,
+                color: getAiToolColorSwatch(activeTool.color).text,
+                borderColor: "transparent",
+              }}
+            >
+              {activeTool.name}
+            </Badge>
+            <button
+              type="button"
+              aria-label="色を変更"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={() => setPickingColorFor((v) => !v)}
+            >
+              <PaletteIcon className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              aria-label="改名"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                setRenaming(activeTool.name);
+                setRenameValue(activeTool.name);
+              }}
+            >
+              <PencilIcon className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              aria-label="削除"
+              className="text-destructive"
+              onClick={() => onDelete(activeTool.name)}
+            >
+              <XIcon className="size-3.5" />
+            </button>
+          </div>
+          {pickingColorFor && (
+            <div className="flex flex-wrap gap-1">
+              {AI_TOOL_COLOR_PALETTE.map((swatch) => (
+                <button
+                  key={swatch.id}
+                  type="button"
+                  aria-label={swatch.label}
+                  title={swatch.label}
+                  onClick={async () => {
+                    await onChangeColor(activeTool.name, swatch.id);
+                    setPickingColorFor(false);
+                  }}
+                  className={`size-5 rounded-full border transition-transform ${
+                    activeTool.color === swatch.id
+                      ? "ring-2 ring-primary ring-offset-1 ring-offset-background"
+                      : "border-border"
+                  }`}
+                  style={{ backgroundColor: swatch.bg }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex gap-2">
         <Input
           placeholder="新しいAIツール"

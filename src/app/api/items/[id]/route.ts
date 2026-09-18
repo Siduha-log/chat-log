@@ -4,7 +4,7 @@ import { deleteItem, getItem, updateItem, type ItemPatch } from "@/lib/kv/items"
 import { listFolders } from "@/lib/kv/folders";
 import { ensureTagsRegistered } from "@/lib/kv/tags";
 import { ensureAiToolsRegistered } from "@/lib/kv/aiTools";
-import { CONTENT_MAX_LENGTH } from "@/lib/constants";
+import { MEMO_MAX_LENGTH, TITLE_MAX_LENGTH } from "@/lib/constants";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -13,12 +13,10 @@ function parseItemPatch(body: unknown): ItemPatch | "invalid_folder_id" {
   const b = body as Record<string, unknown>;
 
   const patch: ItemPatch = {};
-  if (typeof b.title === "string") patch.title = b.title;
+  if (typeof b.title === "string") patch.title = b.title.slice(0, TITLE_MAX_LENGTH);
   if (typeof b.shareUrl === "string") patch.shareUrl = b.shareUrl;
-  if (typeof b.contentText === "string") {
-    patch.contentText = b.contentText.slice(0, CONTENT_MAX_LENGTH);
-  }
-  if (typeof b.memo === "string") patch.memo = b.memo;
+  if (typeof b.contentText === "string") patch.contentText = b.contentText;
+  if (typeof b.memo === "string") patch.memo = b.memo.slice(0, MEMO_MAX_LENGTH);
   if (Array.isArray(b.tags)) {
     patch.tags = b.tags.filter((t): t is string => typeof t === "string");
   }

@@ -116,6 +116,47 @@ export function ItemTable({
           const isDraggedOver = dragOverId === item.id && draggedItemId !== item.id;
           const isBeingDragged = draggedItemId === item.id;
 
+          const badgeGroups: React.ReactNode[][] = [
+            item.aiTool
+              ? [
+                  <Badge
+                    key="aitool"
+                    variant="outline"
+                    style={{
+                      backgroundColor: colorForAiTool(item.aiTool).bg,
+                      color: colorForAiTool(item.aiTool).text,
+                      borderColor: "transparent",
+                    }}
+                  >
+                    {item.aiTool}
+                  </Badge>,
+                ]
+              : [],
+            item.folderId && folderNameById.get(item.folderId)
+              ? [
+                  <Badge key="folder" variant="outline">
+                    📁 {folderNameById.get(item.folderId)}
+                  </Badge>,
+                ]
+              : [],
+            item.tags.map((tag) => {
+              const swatch = colorForTag(tag);
+              return (
+                <Badge
+                  key={tag}
+                  variant="outline"
+                  style={{
+                    backgroundColor: swatch.bg,
+                    color: swatch.text,
+                    borderColor: "transparent",
+                  }}
+                >
+                  #{tag}
+                </Badge>
+              );
+            }),
+          ].filter((group) => group.length > 0);
+
           return (
             <div
               key={item.id}
@@ -167,53 +208,20 @@ export function ItemTable({
               </div>
 
               <div className="flex flex-wrap items-center gap-1.5">
-                {[
-                  item.aiTool && (
-                    <Badge
-                      key="aitool"
-                      variant="outline"
-                      style={{
-                        backgroundColor: colorForAiTool(item.aiTool).bg,
-                        color: colorForAiTool(item.aiTool).text,
-                        borderColor: "transparent",
-                      }}
-                    >
-                      {item.aiTool}
-                    </Badge>
-                  ),
-                  item.folderId && folderNameById.get(item.folderId) && (
-                    <Badge key="folder" variant="outline">
-                      📁 {folderNameById.get(item.folderId)}
-                    </Badge>
-                  ),
-                  item.tags.length > 0 && (
-                    <span key="tags" className="flex flex-wrap items-center gap-1.5">
-                      {item.tags.map((tag) => {
-                        const swatch = colorForTag(tag);
-                        return (
-                          <Badge
-                            key={tag}
-                            variant="outline"
-                            style={{
-                              backgroundColor: swatch.bg,
-                              color: swatch.text,
-                              borderColor: "transparent",
-                            }}
-                          >
-                            #{tag}
-                          </Badge>
-                        );
-                      })}
+                {badgeGroups.map((nodes, gi) => {
+                  const [first, ...rest] = nodes;
+                  // 区切りの「/」は直後の最初のバッジと1つの塊として扱い、
+                  // 折り返し時に「/」だけが前の行に取り残されないようにする
+                  return (
+                    <span key={gi} className="contents">
+                      <span className="inline-flex items-center gap-1.5">
+                        {gi > 0 && <span className="text-muted-foreground">/</span>}
+                        {first}
+                      </span>
+                      {rest}
                     </span>
-                  ),
-                ]
-                  .filter(Boolean)
-                  .map((group, i) => (
-                    <span key={i} className="flex flex-wrap items-center gap-1.5">
-                      {i > 0 && <span className="text-muted-foreground">/</span>}
-                      {group}
-                    </span>
-                  ))}
+                  );
+                })}
               </div>
 
               <span className="text-xs text-muted-foreground">

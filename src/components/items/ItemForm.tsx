@@ -14,7 +14,12 @@ import {
   getAiToolColorSwatch,
   type AiTool,
 } from "@/lib/aiToolColors";
-import { AI_TOOL_NAME_MAX_LENGTH, TAG_NAME_MAX_LENGTH } from "@/lib/constants";
+import {
+  AI_TOOL_NAME_MAX_LENGTH,
+  MEMO_MAX_LENGTH,
+  TAG_NAME_MAX_LENGTH,
+  TITLE_MAX_LENGTH,
+} from "@/lib/constants";
 
 type MetadataResult = {
   aiTool: string;
@@ -103,7 +108,7 @@ export function ItemForm({
       );
       setValues((v) => ({
         ...v,
-        title: meta.title ?? v.title,
+        title: meta.title ? meta.title.slice(0, TITLE_MAX_LENGTH) : v.title,
         aiTool: meta.aiTool || v.aiTool,
         contentText: meta.content ?? v.contentText,
       }));
@@ -211,7 +216,10 @@ export function ItemForm({
         <Input
           id="title"
           value={values.title}
-          onChange={(e) => setValues((v) => ({ ...v, title: e.target.value }))}
+          maxLength={TITLE_MAX_LENGTH}
+          onChange={(e) =>
+            setValues((v) => ({ ...v, title: e.target.value.slice(0, TITLE_MAX_LENGTH) }))
+          }
         />
       </div>
 
@@ -220,7 +228,10 @@ export function ItemForm({
         <Textarea
           id="memo"
           value={values.memo}
-          onChange={(e) => setValues((v) => ({ ...v, memo: e.target.value }))}
+          maxLength={MEMO_MAX_LENGTH}
+          onChange={(e) =>
+            setValues((v) => ({ ...v, memo: e.target.value.slice(0, MEMO_MAX_LENGTH) }))
+          }
           placeholder="一言メモ（空欄可）"
         />
       </div>
