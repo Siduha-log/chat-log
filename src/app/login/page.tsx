@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { FingerprintIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,24 @@ export default function LoginPage() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+  const [passkeyError, setPasskeyError] = useState<string | null>(null);
+
+  const handlePasskeyLogin = async () => {
+    setPasskeyError(null);
+    setPasskeyLoading(true);
+    const supabase = createClient();
+    const { data, error } = await supabase.auth.signInWithPasskey();
+    setPasskeyLoading(false);
+
+    if (error) {
+      setPasskeyError(error.message || "パスキーでのログインに失敗しました。");
+      return;
+    }
+    if (data?.session) {
+      window.location.href = getNextPath();
+    }
+  };
 
   const handleSocialLogin = async (provider: SocialProvider) => {
     const supabase = createClient();
@@ -68,6 +87,19 @@ export default function LoginPage() {
         <ThemeToggle />
       </div>
       <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">ChatHub</h1>
+
+      <div className="flex w-full max-w-sm flex-col gap-2">
+        <Button
+          className="gap-1.5"
+          disabled={passkeyLoading}
+          onClick={handlePasskeyLogin}
+          type="button"
+        >
+          <FingerprintIcon className="size-4" />
+          {passkeyLoading ? "確認中..." : "パスキーでログイン"}
+        </Button>
+        {passkeyError && <p className="text-xs text-destructive">{passkeyError}</p>}
+      </div>
 
       <div className="flex w-full max-w-sm flex-col gap-2">
         {socialProviders.map((p) => (
