@@ -9,6 +9,12 @@ import { Label } from "@/components/ui/label";
 import { detectAiToolFromUrl } from "@/lib/ai-tool-detect";
 import { apiGet } from "@/lib/api/client";
 import { DEFAULT_TAG_COLOR_ID, getTagColorSwatch, type Tag } from "@/lib/tagColors";
+import {
+  DEFAULT_AI_TOOL_COLOR_ID,
+  getAiToolColorSwatch,
+  type AiTool,
+} from "@/lib/aiToolColors";
+import { AI_TOOL_NAME_MAX_LENGTH, TAG_NAME_MAX_LENGTH } from "@/lib/constants";
 
 type MetadataResult = {
   aiTool: string;
@@ -43,7 +49,7 @@ type Props = {
   initial?: Partial<ItemFormValues>;
   folders: Folder[];
   availableTags: Tag[];
-  availableAiTools: string[];
+  availableAiTools: AiTool[];
   onCancel: () => void;
   onSubmit: (values: ItemFormValues) => Promise<void>;
 };
@@ -145,9 +151,15 @@ export function ItemForm({
     getTagColorSwatch(availableTags.find((t) => t.name === name)?.color ?? DEFAULT_TAG_COLOR_ID);
 
   // 同様に、まだ登録されていない自由入力中のAIツール名もボタンとして選択できるよう合成する。
-  const aiToolOptions = values.aiTool && !availableAiTools.includes(values.aiTool)
-    ? [...availableAiTools, values.aiTool]
-    : availableAiTools;
+  const availableAiToolNames = availableAiTools.map((t) => t.name);
+  const aiToolOptions =
+    values.aiTool && !availableAiToolNames.includes(values.aiTool)
+      ? [...availableAiToolNames, values.aiTool]
+      : availableAiToolNames;
+  const colorForAiTool = (name: string) =>
+    getAiToolColorSwatch(
+      availableAiTools.find((t) => t.name === name)?.color ?? DEFAULT_AI_TOOL_COLOR_ID,
+    );
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -226,24 +238,32 @@ export function ItemForm({
       <div className="flex flex-col gap-1">
         <Label>AIツール</Label>
         <div className="flex flex-wrap gap-2">
-          {aiToolOptions.map((tool) => (
-            <button
-              type="button"
-              key={tool}
-              onClick={() => setValues((v) => ({ ...v, aiTool: tool }))}
-              className={`rounded-full border px-3 py-1 text-sm ${
-                values.aiTool === tool ? "bg-foreground text-background" : ""
-              }`}
-            >
-              {tool}
-            </button>
-          ))}
+          {aiToolOptions.map((tool) => {
+            const swatch = colorForAiTool(tool);
+            const selected = values.aiTool === tool;
+            return (
+              <button
+                type="button"
+                key={tool}
+                onClick={() => setValues((v) => ({ ...v, aiTool: tool }))}
+                style={{ backgroundColor: swatch.bg, color: swatch.text }}
+                className={`rounded-full border border-transparent px-3 py-1 text-sm transition-opacity ${
+                  selected ? "ring-2 ring-primary" : "opacity-60"
+                }`}
+              >
+                {tool}
+              </button>
+            );
+          })}
         </div>
         <Input
           className="mt-1"
           placeholder="その他（自由入力）"
           value={values.aiTool}
-          onChange={(e) => setValues((v) => ({ ...v, aiTool: e.target.value }))}
+          maxLength={AI_TOOL_NAME_MAX_LENGTH}
+          onChange={(e) =>
+            setValues((v) => ({ ...v, aiTool: e.target.value.slice(0, AI_TOOL_NAME_MAX_LENGTH) }))
+          }
         />
       </div>
 
@@ -291,7 +311,8 @@ export function ItemForm({
           <Input
             placeholder="新しいタグを追加"
             value={newTag}
-            onChange={(e) => setNewTag(e.target.value)}
+            maxLength={TAG_NAME_MAX_LENGTH}
+            onChange={(e) => setNewTag(e.target.value.slice(0, TAG_NAME_MAX_LENGTH))}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();

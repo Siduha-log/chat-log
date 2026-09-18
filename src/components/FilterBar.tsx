@@ -146,21 +146,6 @@ export function FilterBar({ filters, onChange, availableTags, availableAiTools }
               </div>
             </div>
 
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="sort">並び替え</Label>
-              <select
-                id="sort"
-                className="rounded-md border bg-background px-2 py-2 text-sm"
-                value={filters.sort}
-                onChange={(e) => set("sort", e.target.value as SortOrder)}
-              >
-                <option value="newest">新着順</option>
-                <option value="oldest">古い順</option>
-                <option value="title-asc">タイトル順（昇順）</option>
-                <option value="title-desc">タイトル順（降順）</option>
-              </select>
-            </div>
-
             <div className="flex items-center gap-2 pb-2">
               <button
                 type="button"

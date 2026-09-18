@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TAG_COLOR_PALETTE, getTagColorSwatch, type Tag } from "@/lib/tagColors";
+import { TAG_NAME_MAX_LENGTH } from "@/lib/constants";
 
 type Props = {
   tags: Tag[];
@@ -32,7 +33,8 @@ export function TagPanel({ tags, onCreate, onRename, onDelete, onChangeColor }: 
                 autoFocus
                 className="h-7 w-28 text-sm"
                 value={renameValue}
-                onChange={(e) => setRenameValue(e.target.value)}
+                maxLength={TAG_NAME_MAX_LENGTH}
+                onChange={(e) => setRenameValue(e.target.value.slice(0, TAG_NAME_MAX_LENGTH))}
               />
               <Button
                 size="sm"
@@ -48,7 +50,11 @@ export function TagPanel({ tags, onCreate, onRename, onDelete, onChangeColor }: 
               </Button>
             </div>
           ) : (
-            <div key={tag.name} className="group flex flex-col gap-1">
+            <div
+              key={tag.name}
+              className="group flex flex-col gap-1"
+              onTouchStart={() => {}}
+            >
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -73,7 +79,7 @@ export function TagPanel({ tags, onCreate, onRename, onDelete, onChangeColor }: 
                   </Badge>
                 </button>
                 <div
-                  className={`items-center gap-1 group-hover:flex ${
+                  className={`items-center gap-1 group-hover:flex group-active:flex ${
                     expandedTag === tag.name ? "flex" : "hidden"
                   }`}
                 >
@@ -138,7 +144,8 @@ export function TagPanel({ tags, onCreate, onRename, onDelete, onChangeColor }: 
         <Input
           placeholder="新しいタグ"
           value={newTag}
-          onChange={(e) => setNewTag(e.target.value)}
+          maxLength={TAG_NAME_MAX_LENGTH}
+          onChange={(e) => setNewTag(e.target.value.slice(0, TAG_NAME_MAX_LENGTH))}
           onKeyDown={async (e) => {
             if (e.key === "Enter" && newTag.trim()) {
               e.preventDefault();

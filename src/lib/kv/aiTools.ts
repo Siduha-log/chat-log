@@ -1,29 +1,49 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { bulkUpdateItems, listIndex, type BulkItemPatch } from "@/lib/kv/items";
 import { AI_TOOL_PRESETS } from "@/lib/constants";
+import { DEFAULT_AI_TOOL_COLOR_ID, type AiTool } from "@/lib/aiToolColors";
 
-// user:{user_id}:ai-tools にユーザーが使える全AIツール名をJSON配列で保持する
+export type { AiTool };
+
+// user:{user_id}:ai-tools にユーザーが使える全AIツール（名前+色）をJSON配列で保持する
 // （tags.tsと同じ「軽量な単一キー」方式）。プリセットも遅延シードすることで、
-// プリセットもカスタム項目と同じAPIで改名・削除できるようにする。
-const DEFAULT_AI_TOOLS = [...AI_TOOL_PRESETS];
+// プリセットもカスタム項目と同じAPIで改名・削除・色変更できるようにする。
+const DEFAULT_AI_TOOLS: AiTool[] = AI_TOOL_PRESETS.map((name) => ({
+  name,
+  color: DEFAULT_AI_TOOL_COLOR_ID,
+}));
 
 function aiToolsKey(userId: string) {
   return `user:${userId}:ai-tools`;
 }
 
-async function saveAiTools(userId: string, names: string[]): Promise<void> {
+async function saveAiTools(userId: string, tools: AiTool[]): Promise<void> {
   const { env } = getCloudflareContext();
-  await env.LINKS_KV.put(aiToolsKey(userId), JSON.stringify(names));
+  await env.LINKS_KV.put(aiToolsKey(userId), JSON.stringify(tools));
 }
 
-export async function listAiTools(userId: string): Promise<string[]> {
+// カラーカスタマイズ導入前の旧形式（string[]）データを新形式に変換する。
+function normalizeAiTools(raw: unknown): AiTool[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((t) =>
+    typeof t === "string" ? { name: t, color: DEFAULT_AI_TOOL_COLOR_ID } : (t as AiTool),
+  );
+}
+
+export async function listAiTools(userId: string): Promise<AiTool[]> {
   const { env } = getCloudflareContext();
   const raw = await env.LINKS_KV.get(aiToolsKey(userId));
   if (raw === null) {
     await saveAiTools(userId, DEFAULT_AI_TOOLS);
     return DEFAULT_AI_TOOLS;
   }
-  return JSON.parse(raw) as string[];
+  const parsed = JSON.parse(raw) as unknown[];
+  const tools = normalizeAiTools(parsed);
+  if (parsed.some((t) => typeof t === "string")) {
+    // 旧形式だった場合は、以降読み直さなくて済むよう新形式で保存し直す
+    await saveAiTools(userId, tools);
+  }
+  return tools;
 }
 
 // アイテムの作成・更新で使われたAIツール名を、ユーザーのAIツール一覧に自動登録する。
@@ -34,20 +54,29 @@ export async function ensureAiToolsRegistered(
   names: string[],
 ): Promise<void> {
   const tools = await listAiTools(userId);
-  const newNames = names.filter((n) => n.trim() !== "" && !tools.includes(n));
+  const existing = new Set(tools.map((t) => t.name));
+  const newNames = names.filter((n) => n.trim() !== "" && !existing.has(n));
   if (newNames.length === 0) return;
-  await saveAiTools(userId, [...tools, ...newNames]);
+  await saveAiTools(userId, [
+    ...tools,
+    ...newNames.map((name) => ({ name, color: DEFAULT_AI_TOOL_COLOR_ID })),
+  ]);
 }
 
 export async function renameAiTool(
   userId: string,
   oldName: string,
   newName: string,
-): Promise<string[]> {
+): Promise<AiTool[]> {
   const tools = await listAiTools(userId);
-  const nextTools = Array.from(
-    new Set(tools.map((t) => (t === oldName ? newName : t))),
-  );
+  const seen = new Set<string>();
+  const nextTools: AiTool[] = [];
+  for (const t of tools) {
+    const name = t.name === oldName ? newName : t.name;
+    if (seen.has(name)) continue;
+    seen.add(name);
+    nextTools.push({ ...t, name });
+  }
   await saveAiTools(userId, nextTools);
 
   const index = await listIndex(userId);
@@ -62,12 +91,23 @@ export async function renameAiTool(
   return nextTools;
 }
 
+export async function setAiToolColor(
+  userId: string,
+  name: string,
+  color: string,
+): Promise<AiTool[]> {
+  const tools = await listAiTools(userId);
+  const nextTools = tools.map((t) => (t.name === name ? { ...t, color } : t));
+  await saveAiTools(userId, nextTools);
+  return nextTools;
+}
+
 // アイテム側のaiToolフィールドはあくまで自由入力の1文字列であり、タグのような
 // 配列所属ではないため、一覧からの削除はアイテム側の値には影響させない
 // （既存アイテムの表示ラベルを意図せず消さないため）。単に選択肢から外れるだけ。
-export async function deleteAiTool(userId: string, name: string): Promise<string[]> {
+export async function deleteAiTool(userId: string, name: string): Promise<AiTool[]> {
   const tools = await listAiTools(userId);
-  const nextTools = tools.filter((t) => t !== name);
+  const nextTools = tools.filter((t) => t.name !== name);
   await saveAiTools(userId, nextTools);
   return nextTools;
 }

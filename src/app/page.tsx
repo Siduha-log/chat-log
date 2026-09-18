@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, LogOut } from "lucide-react";
+import { BotIcon, ChevronDownIcon, Download, LogOut, TagsIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { apiGet, apiSend } from "@/lib/api/client";
 import type { IndexEntry, LinkItem } from "@/lib/kv/items";
 import type { Folder } from "@/lib/kv/folders";
 import type { Tag } from "@/lib/tagColors";
+import type { AiTool } from "@/lib/aiToolColors";
 import { ITEMS_PER_PAGE } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,7 +37,7 @@ export default function Home() {
   const [items, setItems] = useState<IndexEntry[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
-  const [aiTools, setAiTools] = useState<string[]>([]);
+  const [aiTools, setAiTools] = useState<AiTool[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -118,7 +119,7 @@ export default function Home() {
         apiGet<{ items: IndexEntry[] }>("/api/items"),
         apiGet<{ folders: Folder[] }>("/api/folders"),
         apiGet<{ tags: Tag[] }>("/api/tags"),
-        apiGet<{ aiTools: string[] }>("/api/ai-tools"),
+        apiGet<{ aiTools: AiTool[] }>("/api/ai-tools"),
       ]);
       setItems(itemsRes.items);
       setFolders(foldersRes.folders);
@@ -407,6 +408,10 @@ export default function Home() {
     await apiSend("/api/ai-tools", "DELETE", { name });
     await reload();
   };
+  const handleChangeAiToolColor = async (name: string, color: string) => {
+    await apiSend("/api/ai-tools", "PATCH", { oldName: name, color });
+    await reload();
+  };
 
   const handleExport = async () => {
     const supabase = createClient();
@@ -461,18 +466,28 @@ export default function Home() {
       <div>
         <button
           type="button"
-          className="text-sm underline"
+          aria-expanded={showAiToolManager}
           onClick={() => setShowAiToolManager((v) => !v)}
+          className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-2 text-sm font-medium hover:bg-muted"
         >
-          {showAiToolManager ? "AIツール管理を閉じる" : "AIツール管理を開く"}
+          <span className="flex items-center gap-2">
+            <BotIcon className="size-4 text-muted-foreground" />
+            AIツール管理
+          </span>
+          <ChevronDownIcon
+            className={`size-4 text-muted-foreground transition-transform ${
+              showAiToolManager ? "rotate-180" : ""
+            }`}
+          />
         </button>
         {showAiToolManager && (
-          <div className="mt-2">
+          <div className="mt-2 px-2">
             <AiToolPanel
               aiTools={aiTools}
               onCreate={handleCreateAiTool}
               onRename={handleRenameAiTool}
               onDelete={handleDeleteAiTool}
+              onChangeColor={handleChangeAiToolColor}
             />
           </div>
         )}
@@ -481,13 +496,22 @@ export default function Home() {
       <div>
         <button
           type="button"
-          className="text-sm underline"
+          aria-expanded={showTagManager}
           onClick={() => setShowTagManager((v) => !v)}
+          className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-2 text-sm font-medium hover:bg-muted"
         >
-          {showTagManager ? "タグ管理を閉じる" : "タグ管理を開く"}
+          <span className="flex items-center gap-2">
+            <TagsIcon className="size-4 text-muted-foreground" />
+            タグ管理
+          </span>
+          <ChevronDownIcon
+            className={`size-4 text-muted-foreground transition-transform ${
+              showTagManager ? "rotate-180" : ""
+            }`}
+          />
         </button>
         {showTagManager && (
-          <div className="mt-2">
+          <div className="mt-2 px-2">
             <TagPanel
               tags={tags}
               onCreate={handleCreateTag}
@@ -506,153 +530,160 @@ export default function Home() {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-4 p-3 sm:p-4 lg:px-6">
-      <header className="flex items-center justify-between gap-2 pr-4 sm:pr-6">
-        <div className="flex items-center gap-2">
-          <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-            <SheetTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-11 w-11 text-xl md:hidden"
-                  aria-label="フォルダを開く"
-                />
-              }
-            >
-              ☰
-            </SheetTrigger>
-            <SheetContent
-              side="left"
-              className="gap-0 overflow-x-hidden p-4 pt-14 data-[side=left]:w-auto data-[side=left]:max-w-[92vw] data-[side=left]:sm:max-w-[92vw]"
-            >
-              <SheetHeader className="sr-only">
-                <SheetTitle>フォルダ</SheetTitle>
-              </SheetHeader>
-              <ResizableSidebar>{sidebarContent}</ResizableSidebar>
-            </SheetContent>
-          </Sheet>
-          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
-            <button
-              type="button"
-              className="cursor-pointer transition-opacity hover:opacity-70"
-              onClick={() => {
-                setSelectedFolder("all");
-                setFilters(defaultFilters);
-                setSidebarOpen(false);
-                setEditing({ mode: "closed" });
-                setPendingShareUrl(null);
-                // フォルダ・絞り込み条件が既に初期値の場合、その変更検知に連動する
-                // ページリセットのロジック（下記paginationDeps）が発火しないため、
-                // ページネーションの位置は明示的にリセットする。
-                setCurrentPage(1);
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-            >
-              ChatHub
-            </button>
-          </h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          <Button variant="outline" size="sm" className="gap-1.5" aria-label="エクスポート" onClick={handleExport}>
-            <Download className="size-4" />
-            <span className="hidden sm:inline">エクスポート</span>
-          </Button>
-          <Button variant="outline" size="sm" className="gap-1.5" aria-label="ログアウト" onClick={handleLogout}>
-            <LogOut className="size-4" />
-            <span className="hidden sm:inline">ログアウト</span>
-          </Button>
+    <>
+      <header className="sticky top-0 z-40 border-b bg-muted">
+        <div className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-2 px-3 py-2 pr-4 sm:px-4 sm:pr-6 lg:px-6">
+          <div className="flex items-center gap-2">
+            <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+              <SheetTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-11 w-11 text-xl md:hidden"
+                    aria-label="フォルダを開く"
+                  />
+                }
+              >
+                ☰
+              </SheetTrigger>
+              <SheetContent
+                side="left"
+                className="gap-0 overflow-x-hidden p-4 pt-14 data-[side=left]:w-auto data-[side=left]:max-w-[92vw] data-[side=left]:sm:max-w-[92vw]"
+              >
+                <SheetHeader className="sr-only">
+                  <SheetTitle>フォルダ</SheetTitle>
+                </SheetHeader>
+                <ResizableSidebar>{sidebarContent}</ResizableSidebar>
+              </SheetContent>
+            </Sheet>
+            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
+              <button
+                type="button"
+                className="cursor-pointer transition-opacity hover:opacity-70"
+                onClick={() => {
+                  setSelectedFolder("all");
+                  setFilters(defaultFilters);
+                  setSidebarOpen(false);
+                  setEditing({ mode: "closed" });
+                  setPendingShareUrl(null);
+                  // フォルダ・絞り込み条件が既に初期値の場合、その変更検知に連動する
+                  // ページリセットのロジック（下記paginationDeps）が発火しないため、
+                  // ページネーションの位置は明示的にリセットする。
+                  setCurrentPage(1);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+              >
+                ChatHub
+              </button>
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Button variant="outline" size="sm" className="gap-1.5" aria-label="エクスポート" onClick={handleExport}>
+              <Download className="size-4" />
+              <span className="hidden sm:inline">エクスポート</span>
+            </Button>
+            <Button variant="outline" size="sm" className="gap-1.5" aria-label="ログアウト" onClick={handleLogout}>
+              <LogOut className="size-4" />
+              <span className="hidden sm:inline">ログアウト</span>
+            </Button>
+          </div>
         </div>
       </header>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-4 p-3 sm:p-4 lg:px-6">
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <div className="flex flex-col gap-4 md:flex-row">
-        <aside className="hidden md:block">
-          <ResizableSidebar>{sidebarContent}</ResizableSidebar>
-        </aside>
+        <div className="flex flex-col gap-4 md:flex-row">
+          <aside className="hidden md:block">
+            <ResizableSidebar>{sidebarContent}</ResizableSidebar>
+          </aside>
 
-        <main className="flex flex-1 flex-col gap-4">
-          <Button
-            variant={editing.mode === "new" ? "outline" : "default"}
-            onClick={() => {
-              if (editing.mode === "new") {
-                closeEditingAndRestoreScroll();
-                return;
-              }
-              savedScrollYRef.current = window.scrollY;
-              setEditing({ mode: "new" });
-              setPendingShareUrl(null);
-            }}
-            className="self-start"
-          >
-            {editing.mode === "new" ? "閉じる" : "+ 新規登録"}
-          </Button>
-
-          {editing.mode !== "closed" && (
-            <div ref={itemFormRef}>
-              <ItemForm
-                key={editing.mode === "edit" ? editing.item.id : "new"}
-                initial={
-                  editing.mode === "edit"
-                    ? editing.item
-                    : pendingShareUrl
-                      ? { shareUrl: pendingShareUrl }
-                      : undefined
+          <main className="flex flex-1 flex-col gap-4">
+            <Button
+              variant={editing.mode === "new" ? "outline" : "default"}
+              onClick={() => {
+                if (editing.mode === "new") {
+                  closeEditingAndRestoreScroll();
+                  return;
                 }
-                folders={folders}
-                availableTags={tags}
-                availableAiTools={aiTools}
-                onCancel={closeEditingAndRestoreScroll}
-                onSubmit={handleCreateOrUpdateItem}
-              />
-            </div>
-          )}
+                savedScrollYRef.current = window.scrollY;
+                setEditing({ mode: "new" });
+                setPendingShareUrl(null);
+              }}
+              className="self-start"
+            >
+              {editing.mode === "new" ? "閉じる" : "+ 新規登録"}
+            </Button>
 
-          <FilterBar
-            filters={filters}
-            onChange={setFilters}
-            availableTags={tags}
-            availableAiTools={availableAiTools}
-          />
+            {editing.mode !== "closed" && (
+              <div ref={itemFormRef}>
+                <ItemForm
+                  key={editing.mode === "edit" ? editing.item.id : "new"}
+                  initial={
+                    editing.mode === "edit"
+                      ? editing.item
+                      : pendingShareUrl
+                        ? { shareUrl: pendingShareUrl }
+                        : undefined
+                  }
+                  folders={folders}
+                  availableTags={tags}
+                  availableAiTools={aiTools}
+                  onCancel={closeEditingAndRestoreScroll}
+                  onSubmit={handleCreateOrUpdateItem}
+                />
+              </div>
+            )}
 
-          {loading ? (
-            <p className="text-sm text-muted-foreground">読み込み中...</p>
-          ) : visibleItems.length === 0 ? (
-            <p className="text-sm text-muted-foreground">該当するリンクがありません。</p>
-          ) : (
-            <>
-              <ItemTable
-                items={pagedItems}
-                tags={tags}
-                folderNameById={folderNameById}
-                draggedItemId={draggedItemId}
-                onDragStart={setDraggedItemId}
-                onDragEnd={() => setDraggedItemId(null)}
-                onMergeIntoNewFolder={handleMergeIntoNewFolder}
-                onToggleFavorite={handleToggleFavorite}
-                onEdit={startEdit}
-                onDelete={handleDeleteItem}
-              />
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-              />
-            </>
-          )}
-        </main>
+            <FilterBar
+              filters={filters}
+              onChange={setFilters}
+              availableTags={tags}
+              availableAiTools={availableAiTools}
+            />
+
+            {loading ? (
+              <p className="text-sm text-muted-foreground">読み込み中...</p>
+            ) : visibleItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground">該当するリンクがありません。</p>
+            ) : (
+              <>
+                <ItemTable
+                  items={pagedItems}
+                  tags={tags}
+                  aiTools={aiTools}
+                  folderNameById={folderNameById}
+                  sort={filters.sort}
+                  onSortChange={(sort) => setFilters((f) => ({ ...f, sort }))}
+                  draggedItemId={draggedItemId}
+                  onDragStart={setDraggedItemId}
+                  onDragEnd={() => setDraggedItemId(null)}
+                  onMergeIntoNewFolder={handleMergeIntoNewFolder}
+                  onToggleFavorite={handleToggleFavorite}
+                  onEdit={startEdit}
+                  onDelete={handleDeleteItem}
+                />
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                />
+              </>
+            )}
+          </main>
+        </div>
+
+        <CreateFolderDialog
+          key={mergeRequest ? `${mergeRequest.draggedId}:${mergeRequest.targetId}` : "closed"}
+          open={mergeRequest !== null}
+          onOpenChange={(open) => {
+            if (!open) setMergeRequest(null);
+          }}
+          onConfirm={handleConfirmMerge}
+        />
       </div>
-
-      <CreateFolderDialog
-        key={mergeRequest ? `${mergeRequest.draggedId}:${mergeRequest.targetId}` : "closed"}
-        open={mergeRequest !== null}
-        onOpenChange={(open) => {
-          if (!open) setMergeRequest(null);
-        }}
-        onConfirm={handleConfirmMerge}
-      />
-    </div>
+    </>
   );
 }
