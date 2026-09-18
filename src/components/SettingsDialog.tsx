@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FingerprintIcon, XIcon } from "lucide-react";
+import { FingerprintIcon, PencilIcon, XIcon } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -10,9 +10,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { FontSizeSetting } from "@/components/FontSizeSetting";
 import { createClient } from "@/lib/supabase/client";
 import { apiSend } from "@/lib/api/client";
+import { PASSKEY_NAME_MAX_LENGTH } from "@/lib/constants";
 
 type Props = {
   open: boolean;
@@ -35,6 +37,8 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
   const [passkeys, setPasskeys] = useState<PasskeyListItem[] | null>(null);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
+  const [renamingPasskeyId, setRenamingPasskeyId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -64,6 +68,26 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
     if (data) {
       setPasskeys((cur) => [...(cur ?? []), data]);
     }
+  };
+
+  const handleRenamePasskey = async (passkeyId: string) => {
+    const friendlyName = renameValue.trim();
+    if (!friendlyName) {
+      setPasskeyError("名前を入力してください。");
+      return;
+    }
+    setPasskeyBusy(true);
+    setPasskeyError(null);
+    const supabase = createClient();
+    const { data, error } = await supabase.auth.passkey.update({ passkeyId, friendlyName });
+    setPasskeyBusy(false);
+
+    if (error) {
+      setPasskeyError(error.message || "パスキー名の変更に失敗しました。");
+      return;
+    }
+    setPasskeys((cur) => (cur ?? []).map((p) => (p.id === passkeyId ? { ...p, ...data } : p)));
+    setRenamingPasskeyId(null);
   };
 
   const handleDeletePasskey = async (passkeyId: string) => {
@@ -118,26 +142,73 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
             <p className="text-xs text-muted-foreground">登録済みのパスキーはありません。</p>
           ) : (
             <div className="flex flex-col gap-1">
-              {passkeys.map((pk) => (
-                <div
-                  key={pk.id}
-                  className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-sm"
-                >
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    <FingerprintIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                    <span className="truncate">{pk.friendly_name || "パスキー"}</span>
-                  </span>
-                  <button
-                    type="button"
-                    aria-label="削除"
-                    className="shrink-0 text-destructive disabled:opacity-50"
-                    disabled={passkeyBusy}
-                    onClick={() => handleDeletePasskey(pk.id)}
+              {passkeys.map((pk) =>
+                renamingPasskeyId === pk.id ? (
+                  <div
+                    key={pk.id}
+                    className="flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-sm"
                   >
-                    <XIcon className="size-3.5" />
-                  </button>
-                </div>
-              ))}
+                    <Input
+                      autoFocus
+                      value={renameValue}
+                      maxLength={PASSKEY_NAME_MAX_LENGTH}
+                      onChange={(e) =>
+                        setRenameValue(e.target.value.slice(0, PASSKEY_NAME_MAX_LENGTH))
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleRenamePasskey(pk.id);
+                        }
+                      }}
+                      className="h-7 text-sm"
+                      disabled={passkeyBusy}
+                    />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={passkeyBusy}
+                      onClick={() => handleRenamePasskey(pk.id)}
+                    >
+                      OK
+                    </Button>
+                  </div>
+                ) : (
+                  <div
+                    key={pk.id}
+                    className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-sm"
+                  >
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <FingerprintIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{pk.friendly_name || "パスキー"}</span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        aria-label="名前を変更"
+                        className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+                        disabled={passkeyBusy}
+                        onClick={() => {
+                          setRenamingPasskeyId(pk.id);
+                          setRenameValue(pk.friendly_name || "");
+                          setPasskeyError(null);
+                        }}
+                      >
+                        <PencilIcon className="size-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="削除"
+                        className="text-destructive disabled:opacity-50"
+                        disabled={passkeyBusy}
+                        onClick={() => handleDeletePasskey(pk.id)}
+                      >
+                        <XIcon className="size-3.5" />
+                      </button>
+                    </span>
+                  </div>
+                ),
+              )}
             </div>
           )}
           <Button

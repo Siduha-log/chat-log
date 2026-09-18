@@ -6,6 +6,8 @@ export const TAG_NAME_MAX_LENGTH = 12;
 
 export const AI_TOOL_NAME_MAX_LENGTH = 12;
 
+export const PASSKEY_NAME_MAX_LENGTH = 20;
+
 export const TITLE_MAX_LENGTH = 30;
 
 export const MEMO_MAX_LENGTH = 140;

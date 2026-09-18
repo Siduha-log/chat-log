@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon, XIcon } from "lucide-react";
 import type { IndexEntry } from "@/lib/kv/items";
 import { Badge } from "@/components/ui/badge";
@@ -53,6 +53,14 @@ export function ItemTable({
   onDelete,
 }: Props) {
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+  // タッチ操作主体の端末ではネイティブDnDのdragイベントが発火せず、
+  // draggable属性があるだけで長押し時に意味のない選択状態が出てしまうため無効化する
+  const [isCoarsePointer, setIsCoarsePointer] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsCoarsePointer(window.matchMedia("(pointer: coarse)").matches);
+  }, []);
 
   const colorForTag = (name: string) =>
     getTagColorSwatch(tags.find((t) => t.name === name)?.color ?? DEFAULT_TAG_COLOR_ID);
@@ -160,7 +168,7 @@ export function ItemTable({
           return (
             <div
               key={item.id}
-              draggable
+              draggable={!isCoarsePointer}
               onDragStart={() => onDragStart(item.id)}
               onDragEnd={() => {
                 onDragEnd();
@@ -180,9 +188,11 @@ export function ItemTable({
                   onMergeIntoNewFolder(draggedItemId, item.id);
                 }
               }}
-              className={`flex cursor-grab flex-col gap-2 px-3 py-3 transition-colors sm:grid sm:grid-cols-[2rem_minmax(0,2.2fr)_minmax(0,1.6fr)_7rem_auto] sm:items-center sm:gap-3 ${
-                isDraggedOver ? "bg-accent ring-2 ring-inset ring-primary" : ""
-              } ${isBeingDragged ? "opacity-40" : ""}`}
+              className={`flex flex-col gap-2 px-3 py-3 transition-colors sm:grid sm:grid-cols-[2rem_minmax(0,2.2fr)_minmax(0,1.6fr)_7rem_auto] sm:items-center sm:gap-3 ${
+                isCoarsePointer ? "select-none" : "cursor-grab"
+              } ${isDraggedOver ? "bg-accent ring-2 ring-inset ring-primary" : ""} ${
+                isBeingDragged ? "opacity-40" : ""
+              }`}
             >
               <button
                 type="button"
