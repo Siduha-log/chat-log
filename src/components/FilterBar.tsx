@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { getTagColorSwatch, type Tag } from "@/lib/tagColors";
 
 export type SortOrder = "newest" | "oldest" | "title-asc" | "title-desc";
 
@@ -31,7 +32,7 @@ export const defaultFilters: Filters = {
 type Props = {
   filters: Filters;
   onChange: (next: Filters) => void;
-  availableTags: string[];
+  availableTags: Tag[];
   availableAiTools: string[];
 };
 
@@ -191,15 +192,26 @@ export function FilterBar({ filters, onChange, availableTags, availableAiTools }
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {availableTags.map((tag) => {
-                  const selected = filters.tags.includes(tag);
+                  const selected = filters.tags.includes(tag.name);
+                  const swatch = getTagColorSwatch(tag.color);
                   return (
                     <button
-                      key={tag}
+                      key={tag.name}
                       type="button"
-                      onClick={() => toggleTag(tag)}
+                      onClick={() => toggleTag(tag.name)}
                       aria-pressed={selected}
                     >
-                      <Badge variant={selected ? "default" : "outline"}>#{tag}</Badge>
+                      <Badge
+                        variant="outline"
+                        style={{
+                          backgroundColor: swatch.bg,
+                          color: swatch.text,
+                          borderColor: "transparent",
+                        }}
+                        className={selected ? "ring-2 ring-primary" : "opacity-60"}
+                      >
+                        #{tag.name}
+                      </Badge>
                     </button>
                   );
                 })}

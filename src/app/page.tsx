@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { apiGet, apiSend } from "@/lib/api/client";
 import type { IndexEntry, LinkItem } from "@/lib/kv/items";
 import type { Folder } from "@/lib/kv/folders";
+import type { Tag } from "@/lib/tagColors";
 import { ITEMS_PER_PAGE } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,7 +35,7 @@ export default function Home() {
   const [authChecked, setAuthChecked] = useState(false);
   const [items, setItems] = useState<IndexEntry[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
-  const [tags, setTags] = useState<string[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [aiTools, setAiTools] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +117,7 @@ export default function Home() {
       const [itemsRes, foldersRes, tagsRes, aiToolsRes] = await Promise.all([
         apiGet<{ items: IndexEntry[] }>("/api/items"),
         apiGet<{ folders: Folder[] }>("/api/folders"),
-        apiGet<{ tags: string[] }>("/api/tags"),
+        apiGet<{ tags: Tag[] }>("/api/tags"),
         apiGet<{ aiTools: string[] }>("/api/ai-tools"),
       ]);
       setItems(itemsRes.items);
@@ -386,6 +387,10 @@ export default function Home() {
     await apiSend("/api/tags", "DELETE", { name });
     await reload();
   };
+  const handleChangeTagColor = async (name: string, color: string) => {
+    await apiSend("/api/tags", "PATCH", { oldName: name, color });
+    await reload();
+  };
 
   // --- AIツール handlers ---
 
@@ -488,6 +493,7 @@ export default function Home() {
               onCreate={handleCreateTag}
               onRename={handleRenameTag}
               onDelete={handleDeleteTag}
+              onChangeColor={handleChangeTagColor}
             />
           </div>
         )}
@@ -619,6 +625,7 @@ export default function Home() {
             <>
               <ItemTable
                 items={pagedItems}
+                tags={tags}
                 folderNameById={folderNameById}
                 draggedItemId={draggedItemId}
                 onDragStart={setDraggedItemId}

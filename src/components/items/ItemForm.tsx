@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { detectAiToolFromUrl } from "@/lib/ai-tool-detect";
 import { apiGet } from "@/lib/api/client";
+import { DEFAULT_TAG_COLOR_ID, getTagColorSwatch, type Tag } from "@/lib/tagColors";
 
 type MetadataResult = {
   aiTool: string;
@@ -41,7 +42,7 @@ const emptyValues: ItemFormValues = {
 type Props = {
   initial?: Partial<ItemFormValues>;
   folders: Folder[];
-  availableTags: string[];
+  availableTags: Tag[];
   availableAiTools: string[];
   onCancel: () => void;
   onSubmit: (values: ItemFormValues) => Promise<void>;
@@ -135,7 +136,13 @@ export function ItemForm({
 
   // availableTagsは既存の登録済みタグ一覧のみを含むため、まだ登録されていない
   // カスタムタグ(このアイテムに今追加したばかりのもの)もチップとして表示できるよう合成する。
-  const tagOptions = [...availableTags, ...values.tags.filter((t) => !availableTags.includes(t))];
+  const availableTagNames = availableTags.map((t) => t.name);
+  const tagOptions = [
+    ...availableTagNames,
+    ...values.tags.filter((t) => !availableTagNames.includes(t)),
+  ];
+  const colorForTag = (name: string) =>
+    getTagColorSwatch(availableTags.find((t) => t.name === name)?.color ?? DEFAULT_TAG_COLOR_ID);
 
   // 同様に、まだ登録されていない自由入力中のAIツール名もボタンとして選択できるよう合成する。
   const aiToolOptions = values.aiTool && !availableAiTools.includes(values.aiTool)
@@ -262,18 +269,23 @@ export function ItemForm({
       <div className="flex flex-col gap-1">
         <Label>タグ</Label>
         <div className="flex flex-wrap gap-2">
-          {tagOptions.map((tag) => (
-            <button
-              type="button"
-              key={tag}
-              onClick={() => toggleTag(tag)}
-              className={`rounded-full border px-3 py-1 text-sm ${
-                values.tags.includes(tag) ? "bg-foreground text-background" : ""
-              }`}
-            >
-              #{tag}
-            </button>
-          ))}
+          {tagOptions.map((tag) => {
+            const swatch = colorForTag(tag);
+            const selected = values.tags.includes(tag);
+            return (
+              <button
+                type="button"
+                key={tag}
+                onClick={() => toggleTag(tag)}
+                style={{ backgroundColor: swatch.bg, color: swatch.text }}
+                className={`rounded-full border border-transparent px-3 py-1 text-sm transition-opacity ${
+                  selected ? "ring-2 ring-primary" : "opacity-60"
+                }`}
+              >
+                #{tag}
+              </button>
+            );
+          })}
         </div>
         <div className="mt-1 flex gap-2">
           <Input

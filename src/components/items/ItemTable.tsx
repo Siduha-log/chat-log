@@ -4,9 +4,11 @@ import { useState } from "react";
 import { XIcon } from "lucide-react";
 import type { IndexEntry } from "@/lib/kv/items";
 import { Badge } from "@/components/ui/badge";
+import { DEFAULT_TAG_COLOR_ID, getTagColorSwatch, type Tag } from "@/lib/tagColors";
 
 type Props = {
   items: IndexEntry[];
+  tags: Tag[];
   folderNameById: Map<string, string>;
   draggedItemId: string | null;
   onDragStart: (id: string) => void;
@@ -19,6 +21,7 @@ type Props = {
 
 export function ItemTable({
   items,
+  tags,
   folderNameById,
   draggedItemId,
   onDragStart,
@@ -29,6 +32,9 @@ export function ItemTable({
   onDelete,
 }: Props) {
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  const colorForTag = (name: string) =>
+    getTagColorSwatch(tags.find((t) => t.name === name)?.color ?? DEFAULT_TAG_COLOR_ID);
 
   return (
     <div className="overflow-hidden rounded-xl border">
@@ -101,11 +107,22 @@ export function ItemTable({
                 {item.folderId && folderNameById.get(item.folderId) && (
                   <Badge variant="outline">📁 {folderNameById.get(item.folderId)}</Badge>
                 )}
-                {item.tags.map((tag) => (
-                  <Badge key={tag} variant="outline">
-                    #{tag}
-                  </Badge>
-                ))}
+                {item.tags.map((tag) => {
+                  const swatch = colorForTag(tag);
+                  return (
+                    <Badge
+                      key={tag}
+                      variant="outline"
+                      style={{
+                        backgroundColor: swatch.bg,
+                        color: swatch.text,
+                        borderColor: "transparent",
+                      }}
+                    >
+                      #{tag}
+                    </Badge>
+                  );
+                })}
               </div>
 
               <span className="text-xs text-muted-foreground">
