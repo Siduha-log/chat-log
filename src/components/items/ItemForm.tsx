@@ -5,11 +5,21 @@ import type { Folder } from "@/lib/kv/folders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { AI_TOOL_PRESETS } from "@/lib/constants";
 import { detectAiToolFromUrl } from "@/lib/ai-tool-detect";
 import { apiGet } from "@/lib/api/client";
+import { DEFAULT_TAG_COLOR_ID, getTagColorSwatch, type Tag } from "@/lib/tagColors";
+import {
+  DEFAULT_AI_TOOL_COLOR_ID,
+  getAiToolColorSwatch,
+  type AiTool,
+} from "@/lib/aiToolColors";
+import {
+  AI_TOOL_NAME_MAX_LENGTH,
+  MEMO_MAX_LENGTH,
+  TAG_NAME_MAX_LENGTH,
+  TITLE_MAX_LENGTH,
+} from "@/lib/constants";
 
 type MetadataResult = {
   aiTool: string;
@@ -43,12 +53,20 @@ const emptyValues: ItemFormValues = {
 type Props = {
   initial?: Partial<ItemFormValues>;
   folders: Folder[];
-  availableTags: string[];
+  availableTags: Tag[];
+  availableAiTools: AiTool[];
   onCancel: () => void;
   onSubmit: (values: ItemFormValues) => Promise<void>;
 };
 
-export function ItemForm({ initial, folders, availableTags, onCancel, onSubmit }: Props) {
+export function ItemForm({
+  initial,
+  folders,
+  availableTags,
+  availableAiTools,
+  onCancel,
+  onSubmit,
+}: Props) {
   const [values, setValues] = useState<ItemFormValues>({ ...emptyValues, ...initial });
   const [newTag, setNewTag] = useState("");
   const [saving, setSaving] = useState(false);
@@ -90,7 +108,7 @@ export function ItemForm({ initial, folders, availableTags, onCancel, onSubmit }
       );
       setValues((v) => ({
         ...v,
-        title: meta.title ?? v.title,
+        title: meta.title ? meta.title.slice(0, TITLE_MAX_LENGTH) : v.title,
         aiTool: meta.aiTool || v.aiTool,
         contentText: meta.content ?? v.contentText,
       }));
@@ -127,6 +145,27 @@ export function ItemForm({ initial, folders, availableTags, onCancel, onSubmit }
     setNewTag("");
   };
 
+  // availableTagsは既存の登録済みタグ一覧のみを含むため、まだ登録されていない
+  // カスタムタグ(このアイテムに今追加したばかりのもの)もチップとして表示できるよう合成する。
+  const availableTagNames = availableTags.map((t) => t.name);
+  const tagOptions = [
+    ...availableTagNames,
+    ...values.tags.filter((t) => !availableTagNames.includes(t)),
+  ];
+  const colorForTag = (name: string) =>
+    getTagColorSwatch(availableTags.find((t) => t.name === name)?.color ?? DEFAULT_TAG_COLOR_ID);
+
+  // 同様に、まだ登録されていない自由入力中のAIツール名もボタンとして選択できるよう合成する。
+  const availableAiToolNames = availableAiTools.map((t) => t.name);
+  const aiToolOptions =
+    values.aiTool && !availableAiToolNames.includes(values.aiTool)
+      ? [...availableAiToolNames, values.aiTool]
+      : availableAiToolNames;
+  const colorForAiTool = (name: string) =>
+    getAiToolColorSwatch(
+      availableAiTools.find((t) => t.name === name)?.color ?? DEFAULT_AI_TOOL_COLOR_ID,
+    );
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!values.shareUrl.trim()) {
@@ -145,7 +184,7 @@ export function ItemForm({ initial, folders, availableTags, onCancel, onSubmit }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3 rounded-lg border p-4">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5 rounded-lg border-2 border-primary p-5">
       <div className="flex flex-col gap-1">
         <Label htmlFor="shareUrl">共有URL *</Label>
         <div className="flex gap-2">
@@ -177,7 +216,10 @@ export function ItemForm({ initial, folders, availableTags, onCancel, onSubmit }
         <Input
           id="title"
           value={values.title}
-          onChange={(e) => setValues((v) => ({ ...v, title: e.target.value }))}
+          maxLength={TITLE_MAX_LENGTH}
+          onChange={(e) =>
+            setValues((v) => ({ ...v, title: e.target.value.slice(0, TITLE_MAX_LENGTH) }))
+          }
         />
       </div>
 
@@ -186,7 +228,10 @@ export function ItemForm({ initial, folders, availableTags, onCancel, onSubmit }
         <Textarea
           id="memo"
           value={values.memo}
-          onChange={(e) => setValues((v) => ({ ...v, memo: e.target.value }))}
+          maxLength={MEMO_MAX_LENGTH}
+          onChange={(e) =>
+            setValues((v) => ({ ...v, memo: e.target.value.slice(0, MEMO_MAX_LENGTH) }))
+          }
           placeholder="一言メモ（空欄可）"
         />
       </div>
@@ -204,24 +249,32 @@ export function ItemForm({ initial, folders, availableTags, onCancel, onSubmit }
       <div className="flex flex-col gap-1">
         <Label>AIツール</Label>
         <div className="flex flex-wrap gap-2">
-          {AI_TOOL_PRESETS.map((tool) => (
-            <button
-              type="button"
-              key={tool}
-              onClick={() => setValues((v) => ({ ...v, aiTool: tool }))}
-              className={`rounded-full border px-3 py-1 text-sm ${
-                values.aiTool === tool ? "bg-foreground text-background" : ""
-              }`}
-            >
-              {tool}
-            </button>
-          ))}
+          {aiToolOptions.map((tool) => {
+            const swatch = colorForAiTool(tool);
+            const selected = values.aiTool === tool;
+            return (
+              <button
+                type="button"
+                key={tool}
+                onClick={() => setValues((v) => ({ ...v, aiTool: tool }))}
+                style={{ backgroundColor: swatch.bg, color: swatch.text }}
+                className={`rounded-full border border-transparent px-3 py-1 text-sm transition-opacity ${
+                  selected ? "ring-2 ring-primary" : "opacity-60"
+                }`}
+              >
+                {tool}
+              </button>
+            );
+          })}
         </div>
         <Input
           className="mt-1"
           placeholder="その他（自由入力）"
           value={values.aiTool}
-          onChange={(e) => setValues((v) => ({ ...v, aiTool: e.target.value }))}
+          maxLength={AI_TOOL_NAME_MAX_LENGTH}
+          onChange={(e) =>
+            setValues((v) => ({ ...v, aiTool: e.target.value.slice(0, AI_TOOL_NAME_MAX_LENGTH) }))
+          }
         />
       </div>
 
@@ -247,24 +300,30 @@ export function ItemForm({ initial, folders, availableTags, onCancel, onSubmit }
       <div className="flex flex-col gap-1">
         <Label>タグ</Label>
         <div className="flex flex-wrap gap-2">
-          {availableTags.map((tag) => (
-            <button
-              type="button"
-              key={tag}
-              onClick={() => toggleTag(tag)}
-              className={`rounded-full border px-3 py-1 text-sm ${
-                values.tags.includes(tag) ? "bg-foreground text-background" : ""
-              }`}
-            >
-              #{tag}
-            </button>
-          ))}
+          {tagOptions.map((tag) => {
+            const swatch = colorForTag(tag);
+            const selected = values.tags.includes(tag);
+            return (
+              <button
+                type="button"
+                key={tag}
+                onClick={() => toggleTag(tag)}
+                style={{ backgroundColor: swatch.bg, color: swatch.text }}
+                className={`rounded-full border border-transparent px-3 py-1 text-sm transition-opacity ${
+                  selected ? "ring-2 ring-primary" : "opacity-60"
+                }`}
+              >
+                #{tag}
+              </button>
+            );
+          })}
         </div>
         <div className="mt-1 flex gap-2">
           <Input
             placeholder="新しいタグを追加"
             value={newTag}
-            onChange={(e) => setNewTag(e.target.value)}
+            maxLength={TAG_NAME_MAX_LENGTH}
+            onChange={(e) => setNewTag(e.target.value.slice(0, TAG_NAME_MAX_LENGTH))}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -278,14 +337,17 @@ export function ItemForm({ initial, folders, availableTags, onCancel, onSubmit }
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <Checkbox
-          id="favorite"
-          checked={values.favorite}
-          onCheckedChange={(c) => setValues((v) => ({ ...v, favorite: c === true }))}
-        />
-        <Label htmlFor="favorite">お気に入りに登録</Label>
-      </div>
+      <button
+        type="button"
+        onClick={() => setValues((v) => ({ ...v, favorite: !v.favorite }))}
+        aria-pressed={values.favorite}
+        className="flex w-fit items-center gap-1.5 text-sm"
+      >
+        <span className="text-lg leading-none text-favorite">
+          {values.favorite ? "★" : "☆"}
+        </span>
+        お気に入り登録
+      </button>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 

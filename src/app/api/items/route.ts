@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { getVerifiedUserId } from "@/lib/auth/verify";
 import { createItem, listIndex, type NewItemInput } from "@/lib/kv/items";
 import { listFolders } from "@/lib/kv/folders";
-import { CONTENT_MAX_LENGTH } from "@/lib/constants";
+import { ensureTagsRegistered } from "@/lib/kv/tags";
+import { ensureAiToolsRegistered } from "@/lib/kv/aiTools";
+import { MEMO_MAX_LENGTH, TITLE_MAX_LENGTH } from "@/lib/constants";
 
 export async function GET(request: Request) {
   const userId = await getVerifiedUserId(request);
@@ -32,13 +34,10 @@ function parseNewItemInput(
   if (typeof b.shareUrl !== "string" || b.shareUrl.trim() === "") return null;
 
   return {
-    title: typeof b.title === "string" ? b.title : "",
+    title: typeof b.title === "string" ? b.title.slice(0, TITLE_MAX_LENGTH) : "",
     shareUrl: b.shareUrl,
-    contentText:
-      typeof b.contentText === "string"
-        ? b.contentText.slice(0, CONTENT_MAX_LENGTH)
-        : "",
-    memo: typeof b.memo === "string" ? b.memo : "",
+    contentText: typeof b.contentText === "string" ? b.contentText : "",
+    memo: typeof b.memo === "string" ? b.memo.slice(0, MEMO_MAX_LENGTH) : "",
     tags: Array.isArray(b.tags)
       ? b.tags.filter((t): t is string => typeof t === "string")
       : [],
@@ -76,5 +75,11 @@ export async function POST(request: Request) {
   }
 
   const item = await createItem(userId, { ...input, folderId });
+  if (item.tags.length > 0) {
+    await ensureTagsRegistered(userId, item.tags);
+  }
+  if (item.aiTool.trim() !== "") {
+    await ensureAiToolsRegistered(userId, [item.aiTool]);
+  }
   return NextResponse.json({ item }, { status: 201 });
 }

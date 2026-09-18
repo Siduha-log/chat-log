@@ -1,12 +1,33 @@
 "use client";
 
 import { useState } from "react";
+import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon, XIcon } from "lucide-react";
 import type { IndexEntry } from "@/lib/kv/items";
 import { Badge } from "@/components/ui/badge";
+import { DEFAULT_TAG_COLOR_ID, getTagColorSwatch, type Tag } from "@/lib/tagColors";
+import {
+  DEFAULT_AI_TOOL_COLOR_ID,
+  getAiToolColorSwatch,
+  type AiTool,
+} from "@/lib/aiToolColors";
+import type { SortOrder } from "@/components/FilterBar";
+
+function SortIcon({ active, direction }: { active: boolean; direction: "asc" | "desc" }) {
+  if (!active) return <ArrowUpDownIcon className="size-3.5 text-muted-foreground/50" />;
+  return direction === "asc" ? (
+    <ArrowUpIcon className="size-3.5 text-foreground" />
+  ) : (
+    <ArrowDownIcon className="size-3.5 text-foreground" />
+  );
+}
 
 type Props = {
   items: IndexEntry[];
+  tags: Tag[];
+  aiTools: AiTool[];
   folderNameById: Map<string, string>;
+  sort: SortOrder;
+  onSortChange: (sort: SortOrder) => void;
   draggedItemId: string | null;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
@@ -18,7 +39,11 @@ type Props = {
 
 export function ItemTable({
   items,
+  tags,
+  aiTools,
   folderNameById,
+  sort,
+  onSortChange,
   draggedItemId,
   onDragStart,
   onDragEnd,
@@ -29,14 +54,60 @@ export function ItemTable({
 }: Props) {
   const [dragOverId, setDragOverId] = useState<string | null>(null);
 
+  const colorForTag = (name: string) =>
+    getTagColorSwatch(tags.find((t) => t.name === name)?.color ?? DEFAULT_TAG_COLOR_ID);
+  const colorForAiTool = (name: string) =>
+    getAiToolColorSwatch(
+      aiTools.find((t) => t.name === name)?.color ?? DEFAULT_AI_TOOL_COLOR_ID,
+    );
+
+  const toggleTitleSort = () => onSortChange(sort === "title-asc" ? "title-desc" : "title-asc");
+  const toggleDateSort = () => onSortChange(sort === "newest" ? "oldest" : "newest");
+
   return (
     <div className="overflow-hidden rounded-xl border">
+      {/* 並び替え（sm未満のみ表示。sm以上はヘッダー行の列見出しから直接切り替える） */}
+      <div className="flex items-center justify-end gap-1.5 border-b bg-muted px-3 py-2 text-xs text-muted-foreground sm:hidden">
+        <ArrowUpDownIcon className="size-3.5" />
+        <select
+          aria-label="並び替え"
+          className="rounded-md border bg-background px-2 py-1 text-xs"
+          value={sort}
+          onChange={(e) => onSortChange(e.target.value as SortOrder)}
+        >
+          <option value="newest">新着順</option>
+          <option value="oldest">古い順</option>
+          <option value="title-asc">タイトル順（昇順）</option>
+          <option value="title-desc">タイトル順（降順）</option>
+        </select>
+      </div>
+
       {/* ヘッダー行（sm以上のみ表示） */}
       <div className="hidden border-b bg-muted/60 px-3 py-2 text-xs font-medium text-muted-foreground sm:grid sm:grid-cols-[2rem_minmax(0,2.2fr)_minmax(0,1.6fr)_7rem_auto] sm:items-center sm:gap-3">
         <span />
-        <span>タイトル / メモ</span>
-        <span>AIツール・フォルダ・タグ</span>
-        <span>日付</span>
+        <button
+          type="button"
+          onClick={toggleTitleSort}
+          className="flex items-center gap-1 text-left transition-colors hover:text-foreground"
+        >
+          タイトル / メモ
+          <SortIcon
+            active={sort === "title-asc" || sort === "title-desc"}
+            direction={sort === "title-desc" ? "desc" : "asc"}
+          />
+        </button>
+        <span>AIツール / フォルダ名 / タグ</span>
+        <button
+          type="button"
+          onClick={toggleDateSort}
+          className="flex items-center gap-1 text-left transition-colors hover:text-foreground"
+        >
+          日付
+          <SortIcon
+            active={sort === "newest" || sort === "oldest"}
+            direction={sort === "oldest" ? "asc" : "desc"}
+          />
+        </button>
         <span className="text-right">操作</span>
       </div>
 
@@ -44,6 +115,47 @@ export function ItemTable({
         {items.map((item) => {
           const isDraggedOver = dragOverId === item.id && draggedItemId !== item.id;
           const isBeingDragged = draggedItemId === item.id;
+
+          const badgeGroups: React.ReactNode[][] = [
+            item.aiTool
+              ? [
+                  <Badge
+                    key="aitool"
+                    variant="outline"
+                    style={{
+                      backgroundColor: colorForAiTool(item.aiTool).bg,
+                      color: colorForAiTool(item.aiTool).text,
+                      borderColor: "transparent",
+                    }}
+                  >
+                    {item.aiTool}
+                  </Badge>,
+                ]
+              : [],
+            item.folderId && folderNameById.get(item.folderId)
+              ? [
+                  <Badge key="folder" variant="outline">
+                    📁 {folderNameById.get(item.folderId)}
+                  </Badge>,
+                ]
+              : [],
+            item.tags.map((tag) => {
+              const swatch = colorForTag(tag);
+              return (
+                <Badge
+                  key={tag}
+                  variant="outline"
+                  style={{
+                    backgroundColor: swatch.bg,
+                    color: swatch.text,
+                    borderColor: "transparent",
+                  }}
+                >
+                  #{tag}
+                </Badge>
+              );
+            }),
+          ].filter((group) => group.length > 0);
 
           return (
             <div
@@ -96,15 +208,20 @@ export function ItemTable({
               </div>
 
               <div className="flex flex-wrap items-center gap-1.5">
-                {item.aiTool && <Badge variant="secondary">{item.aiTool}</Badge>}
-                {item.folderId && folderNameById.get(item.folderId) && (
-                  <Badge variant="outline">📁 {folderNameById.get(item.folderId)}</Badge>
-                )}
-                {item.tags.map((tag) => (
-                  <Badge key={tag} variant="outline">
-                    #{tag}
-                  </Badge>
-                ))}
+                {badgeGroups.map((nodes, gi) => {
+                  const [first, ...rest] = nodes;
+                  // 区切りの「/」は直後の最初のバッジと1つの塊として扱い、
+                  // 折り返し時に「/」だけが前の行に取り残されないようにする
+                  return (
+                    <span key={gi} className="contents">
+                      <span className="inline-flex items-center gap-1.5">
+                        {gi > 0 && <span className="text-muted-foreground">/</span>}
+                        {first}
+                      </span>
+                      {rest}
+                    </span>
+                  );
+                })}
               </div>
 
               <span className="text-xs text-muted-foreground">
@@ -117,10 +234,11 @@ export function ItemTable({
                 </button>
                 <button
                   type="button"
-                  className="text-destructive underline"
+                  aria-label="削除"
+                  className="text-destructive"
                   onClick={() => onDelete(item.id)}
                 >
-                  削除
+                  <XIcon className="size-3.5" />
                 </button>
               </div>
             </div>

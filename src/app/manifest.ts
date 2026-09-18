@@ -23,7 +23,7 @@ export default function manifest(): MetadataRoute.Manifest {
     // icon.svgは元のicon.png（見た目はそのまま）をbase64で<image>埋め込みしたSVG
     // コンテナ（public/icon.svg生成時のコメント参照）。AndroidのWebAPK生成が
     // 一般的にSVGアイコンを想定していない点は既知のリスクとして許容している。
-    icons: [{ src: "/icon.svg?v=svg_override_1", sizes: "any", type: "image/svg+xml", purpose: "any" }],
+    icons: [{ src: "/icon.svg?v=svg_override_2", sizes: "any", type: "image/svg+xml", purpose: "any" }],
     share_target: {
       action: "/share",
       method: "GET",

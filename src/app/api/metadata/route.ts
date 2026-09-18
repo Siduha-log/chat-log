@@ -3,7 +3,6 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import puppeteer from "@cloudflare/puppeteer";
 import { getVerifiedUserId } from "@/lib/auth/verify";
 import { detectAiToolFromUrl } from "@/lib/ai-tool-detect";
-import { CONTENT_MAX_LENGTH } from "@/lib/constants";
 
 // ページ本文はJSで描画されるSPA（ChatGPT/Claude/Gemini等の共有ページ）が多く、
 // サーバー側の単純fetchでは取得できない。OGPメタタグ（title/description）は
@@ -230,7 +229,7 @@ async function fetchBrowserRenderingContent(
     const trimmed = text.trim();
     if (!trimmed || looksLikeRenderFailure(trimmed)) return empty;
 
-    return { content: trimmed.slice(0, CONTENT_MAX_LENGTH) };
+    return { content: trimmed };
   } catch {
     return empty;
   } finally {
@@ -300,7 +299,7 @@ async function fetchJinaContentOnce(
     if (!body) return empty;
 
     return {
-      content: body.slice(0, CONTENT_MAX_LENGTH),
+      content: body,
       headingTitle: extractHeadingTitle(body),
     };
   } catch {

@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { getTagColorSwatch, type Tag } from "@/lib/tagColors";
 
 export type SortOrder = "newest" | "oldest" | "title-asc" | "title-desc";
 
@@ -32,7 +32,7 @@ export const defaultFilters: Filters = {
 type Props = {
   filters: Filters;
   onChange: (next: Filters) => void;
-  availableTags: string[];
+  availableTags: Tag[];
   availableAiTools: string[];
 };
 
@@ -63,16 +63,27 @@ export function FilterBar({ filters, onChange, availableTags, availableAiTools }
     );
   };
 
+  const clearAdvancedFilters = () => {
+    onChange({
+      ...filters,
+      tags: defaultFilters.tags,
+      aiTool: defaultFilters.aiTool,
+      favoriteOnly: defaultFilters.favoriteOnly,
+      dateFrom: defaultFilters.dateFrom,
+      dateTo: defaultFilters.dateTo,
+    });
+  };
+
   const advancedActive = hasActiveAdvancedFilters(filters);
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border p-3">
+    <div className="flex flex-col gap-4 rounded-lg border p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <div className="flex flex-1 flex-col gap-1">
           <Label htmlFor="search">検索</Label>
           <Input
             id="search"
-            placeholder="タイトル・メモ・タグ・本文で検索"
+            placeholder="タイトル・メモ・本文で検索"
             value={filters.query}
             onChange={(e) => set("query", e.target.value)}
           />
@@ -96,8 +107,8 @@ export function FilterBar({ filters, onChange, availableTags, availableAiTools }
       </div>
 
       {expanded && (
-        <div className="flex flex-col gap-3 border-t pt-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="flex flex-col gap-5 border-t pt-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:gap-6">
             <div className="flex flex-col gap-1">
               <Label htmlFor="aitool-filter">AIツール</Label>
               <select
@@ -135,28 +146,18 @@ export function FilterBar({ filters, onChange, availableTags, availableAiTools }
               </div>
             </div>
 
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="sort">並び替え</Label>
-              <select
-                id="sort"
-                className="rounded-md border bg-background px-2 py-2 text-sm"
-                value={filters.sort}
-                onChange={(e) => set("sort", e.target.value as SortOrder)}
-              >
-                <option value="newest">新着順</option>
-                <option value="oldest">古い順</option>
-                <option value="title-asc">タイトル順（昇順）</option>
-                <option value="title-desc">タイトル順（降順）</option>
-              </select>
-            </div>
-
             <div className="flex items-center gap-2 pb-2">
-              <Checkbox
-                id="favorite-only"
-                checked={filters.favoriteOnly}
-                onCheckedChange={(c) => set("favoriteOnly", c === true)}
-              />
-              <Label htmlFor="favorite-only">★のみ</Label>
+              <button
+                type="button"
+                onClick={() => set("favoriteOnly", !filters.favoriteOnly)}
+                aria-pressed={filters.favoriteOnly}
+                className="flex items-center gap-1.5 text-sm"
+              >
+                <span className="text-lg leading-none text-favorite">
+                  {filters.favoriteOnly ? "★" : "☆"}
+                </span>
+                お気に入り登録
+              </button>
             </div>
           </div>
 
@@ -176,19 +177,42 @@ export function FilterBar({ filters, onChange, availableTags, availableAiTools }
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {availableTags.map((tag) => {
-                  const selected = filters.tags.includes(tag);
+                  const selected = filters.tags.includes(tag.name);
+                  const swatch = getTagColorSwatch(tag.color);
                   return (
                     <button
-                      key={tag}
+                      key={tag.name}
                       type="button"
-                      onClick={() => toggleTag(tag)}
+                      onClick={() => toggleTag(tag.name)}
                       aria-pressed={selected}
                     >
-                      <Badge variant={selected ? "default" : "outline"}>#{tag}</Badge>
+                      <Badge
+                        variant="outline"
+                        style={{
+                          backgroundColor: swatch.bg,
+                          color: swatch.text,
+                          borderColor: "transparent",
+                        }}
+                        className={selected ? "ring-2 ring-primary" : "opacity-60"}
+                      >
+                        #{tag.name}
+                      </Badge>
                     </button>
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {advancedActive && (
+            <div className="flex justify-start">
+              <button
+                type="button"
+                onClick={clearAdvancedFilters}
+                className="inline-flex h-5 w-fit shrink-0 items-center justify-center rounded-4xl bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/70"
+              >
+                絞り込み全解除
+              </button>
             </div>
           )}
         </div>

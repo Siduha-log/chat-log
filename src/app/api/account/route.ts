@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { deleteAllItems } from "@/lib/kv/items";
 import { deleteAllFolders } from "@/lib/kv/folders";
 import { deleteAllTags } from "@/lib/kv/tags";
+import { deleteAllAiTools } from "@/lib/kv/aiTools";
 
 // アカウント削除。KVデータを先に消してからSupabase Authのユーザー自体を削除する。
 // この順序にしているのは、Auth削除を先に行うと、その後のKV削除が失敗した場合に
@@ -16,7 +17,12 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  await Promise.all([deleteAllItems(userId), deleteAllFolders(userId), deleteAllTags(userId)]);
+  await Promise.all([
+    deleteAllItems(userId),
+    deleteAllFolders(userId),
+    deleteAllTags(userId),
+    deleteAllAiTools(userId),
+  ]);
 
   const admin = createAdminClient();
   const { error } = await admin.auth.admin.deleteUser(userId);

@@ -59,8 +59,9 @@
 }
 
 :root {
-  /* 文字サイズ設定のデフォルト（「中」）。data-font-size属性なし＝中として扱う。 */
-  --font-scale: 1.1;
+  /* 文字サイズ設定のデフォルト（「中」）。data-font-size属性なし＝中として扱う。
+     旧「大」(1.25)を新「中」として再定義したため、この値も1.25に変更している。 */
+  --font-scale: 1.25;
 
   /* 優しい色調（くすみカラー・パステル基調）のライトテーマ */
   --background: oklch(0.985 0.006 95);
@@ -135,11 +136,12 @@
 }
 
 :root[data-font-size="small"] {
-  --font-scale: 1;
+  /* 旧「中」(1.1)を新「小」として再定義 */
+  --font-scale: 1.1;
 }
 
 :root[data-font-size="large"] {
-  --font-scale: 1.25;
+  --font-scale: 1.4;
 }
 
 @layer base {
