@@ -24,20 +24,27 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Secrets 未設定のまま成功扱いになるのを防ぐ
           if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_ANON_KEY}" ]; then
             echo "::error::SUPABASE_URL / SUPABASE_ANON_KEY が Repository Secrets に設定されていません"
             exit 1
           fi
 
-          # 末尾スラッシュを除去して URL を組み立てる
           BASE_URL="${SUPABASE_URL%/}"
 
-          # --fail: HTTP 4xx/5xx で失敗扱い / --retry: 一時的な失敗を再試行
-          STATUS=$(curl --silent --show-error --fail \
+          # ヘルスチェック用の Ping（APIレスポンスを受け取る）
+          STATUS=$(curl --silent --show-error \
             --retry 3 --retry-delay 5 --max-time 30 \
             --output /dev/null --write-out "%{http_code}" \
             --header "apikey: ${SUPABASE_ANON_KEY}" \
+            --header "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
             "${BASE_URL}/rest/v1/")
 
           echo "Supabase から HTTP ${STATUS} が返却されました"
+
+          # 200 または 201 や 204 等の 2xx 成功ステータスであればOK
+          if [[ "$STATUS" =~ ^2 ]]; then
+            echo "Ping 成功！プロジェクトはアクティブです。"
+          else
+            echo "::error::予期せぬステータスコードです: ${STATUS}"
+            exit 1
+          fi
