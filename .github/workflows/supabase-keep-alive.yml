@@ -29,22 +29,22 @@ jobs:
             exit 1
           fi
 
-          BASE_URL="${SUPABASE_URL%/}"
+          # 末尾スラッシュや余計なパスを除去してベースURLをセット
+          DOMAIN=$(echo "${SUPABASE_URL}" | sed -E 's|(https?://[^/]+).*|\1|')
 
-          # ヘルスチェック用の Ping（APIレスポンスを受け取る）
+          # Auth のヘルスチェック（認証なしで 200 が返る安全なエンドポイント）
           STATUS=$(curl --silent --show-error \
             --retry 3 --retry-delay 5 --max-time 30 \
             --output /dev/null --write-out "%{http_code}" \
             --header "apikey: ${SUPABASE_ANON_KEY}" \
             --header "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-            "${BASE_URL}/rest/v1/")
+            "${DOMAIN}/auth/v1/health")
 
           echo "Supabase から HTTP ${STATUS} が返却されました"
 
-          # 200 または 201 や 204 等の 2xx 成功ステータスであればOK
-          if [[ "$STATUS" =~ ^2 ]]; then
+          if [ "$STATUS" -eq 200 ]; then
             echo "Ping 成功！プロジェクトはアクティブです。"
           else
-            echo "::error::予期せぬステータスコードです: ${STATUS}"
+            echo "::error::ヘルスチェック失敗 (Status: ${STATUS})"
             exit 1
           fi
