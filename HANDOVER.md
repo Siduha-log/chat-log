@@ -148,6 +148,20 @@ PKCEフローの検証用の鍵はブラウザのlocalStorageに保存される�
 
 **USBケーブルを抜くと`adb reverse`の接続も切れる**ため、再度使う場合は3〜5を再実行すること（adb自体の再インストールは不要）。
 
+### 4.10 Supabase無料プランの自動ポーズ対策（GitHub Actions + cron-job.org）
+Supabase無料プランは1週間アクセスがないとプロジェクトが自動ポーズされるため、GitHub Actionsで定期的にpingしている。ただしGitHub Actionsは**リポジトリに60日間活動がないとスケジュール実行を自動で無効化する**ため、その対策も別サービスで行っている。
+
+```
+cron-job.org（毎月25日）──▶ GitHub（ワークフローを叩き起こす／60日リセット）
+                                   │
+                                   ▼
+GitHub Actions（3日ごと）──▶ Supabase /auth/v1/health（ポーズ防止）
+```
+
+- **ワークフロー本体**: `.github/workflows/supabase-keep-alive.yml`（3日ごとのcron + `workflow_dispatch`）。`SUPABASE_URL` / `SUPABASE_ANON_KEY` はGitHub Repository Secretsを参照
+- **60日リセット対策**: 外部サービス **cron-job.org** で**毎月25日**にGitHubを叩き、Actionsのスケジュール無効化を防いでいる（設定はcron-job.org側のアカウントにあり、このリポジトリのコードには含まれない）
+- **困ったとき**: Actionsのスケジュールが止まっていたら、Actionsタブから「Supabase Keep Alive」を再有効化するか手動実行（Run workflow）する。cron-job.org側のジョブが失敗・停止していないかも確認すること
+
 ---
 
 以上を踏まえて、`plan_v0.3.md`の「4. 次回着手時の進め方」に沿って作業を再開してください。
