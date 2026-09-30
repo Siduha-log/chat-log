@@ -1,0 +1,43 @@
+name: Supabase Keep Alive
+
+# Supabase 無料プランは 1 週間アクセスがないと自動ポーズされるため、
+# 定期的に REST API へリクエストを送ってプロジェクトを休止させない。
+on:
+  schedule:
+    # 3日ごとに 1 回（UTC 00:00 = JST 09:00）
+    - cron: "0 0 */3 * *"
+  # Actions タブから手動実行も可能
+  workflow_dispatch:
+
+# 最小権限（リポジトリの読み取りも不要）
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Supabase REST API へ GET リクエストを送信
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+
+          # Secrets 未設定のまま成功扱いになるのを防ぐ
+          if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_ANON_KEY}" ]; then
+            echo "::error::SUPABASE_URL / SUPABASE_ANON_KEY が Repository Secrets に設定されていません"
+            exit 1
+          fi
+
+          # 末尾スラッシュを除去して URL を組み立てる
+          BASE_URL="${SUPABASE_URL%/}"
+
+          # --fail: HTTP 4xx/5xx で失敗扱い / --retry: 一時的な失敗を再試行
+          STATUS=$(curl --silent --show-error --fail \
+            --retry 3 --retry-delay 5 --max-time 30 \
+            --output /dev/null --write-out "%{http_code}" \
+            --header "apikey: ${SUPABASE_ANON_KEY}" \
+            "${BASE_URL}/rest/v1/")
+
+          echo "Supabase から HTTP ${STATUS} が返却されました"
